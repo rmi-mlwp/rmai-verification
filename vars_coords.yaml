@@ -1,0 +1,17 @@
+variables:
+  2t:
+    alternatives:
+      - 2t_2
+    units: K
+# etc 
+
+coordinates:
+  x:
+    units: m
+  y:
+    units: m
+  lead_time:
+    units: h
+  fc_date:
+    units: ns
+  
