@@ -141,7 +141,7 @@ verification:
 ```
 
 💾 **output**  
-The `outout` section defines how the output will be saved. If the section is omitted or empty, the output will not be saved. In this section you can select the output-file type either generally for all clusters or (if specified) for clusters seperately. For each cluster the output path sould be specified.  
+The `output` section defines how the output will be saved. If the section is omitted or empty, the output will not be saved. In this section you can select the output-file type either generally for all clusters or (if specified) for clusters seperately. For each cluster the output path sould be specified.  
 For each type also the specific kwargs can be provided
 example:
 ```yaml
@@ -152,7 +152,7 @@ output:
     engine: h5netcdf
   per_reference_time:
     type: zarr
-    path: /path/to/verification/output/per_reference_time
+    path: /path/to/verification/output/per_reference_time.zarr
 ```
 
 📊 **visualization**  
@@ -165,6 +165,6 @@ visualization:
     directory: /path/to/my/plots
     prefix: general_plot
     x: lead_time
-# No plotting for the per_reference_time cluster, since it doesn't make sense at it still has the reference_time dimensions
+# No plotting for the per_reference_time cluster, since it doesn't make sense as it still has the reference_time dimension
 # Currently no additional averaging is done if there is more then 1 dimension remain after selecting x and y
 ```
