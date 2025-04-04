@@ -87,17 +87,18 @@ class Verification():
         self._clusters = clusters
 
     def visualize_clusters(self):
-        for cluster, metrics in self._clusters.items():
-            config = prep_config(self._config["visualization"],cluster)
-            prefix = os.path.join(
-                config.pop("directory","./"),
-                config.pop("prefix",cluster)
-            )
-            plot_overview(
-                dataset = metrics,
-                prefix=prefix,
-                **config
-            )
+        if not (self._config.get("visualization",None) == None):
+            for cluster, metrics in self._clusters.items():
+                config = prep_config(self._config["visualization"],cluster)
+                prefix = os.path.join(
+                    config.pop("directory","./"),
+                    config.pop("prefix",cluster)
+                )
+                plot_overview(
+                    dataset = metrics,
+                    prefix=prefix,
+                    **config
+                )
     
     def verify(self):
         self.homogenize_datastores()
