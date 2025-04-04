@@ -39,16 +39,29 @@ parser.add_argument(
 args = parser.parse_args()
 
 from dask.distributed import Client, LocalCluster
+from dask_jobqueue import SLURMCluster
 from verification.verification import Verification
 
 if __name__ == "__main__":
 
-    cluster = LocalCluster(
-        n_workers=args.n_workers,
-        threads_per_worker=args.threads_per_worker,
-        processes=True,
+    # cluster = LocalCluster(
+    #     n_workers=args.n_workers,
+    #     threads_per_worker=args.threads_per_worker,
+    #     processes=True,
+    # )
+
+    cluster = SLURMCluster(
+        queue = "standard",
+        account = "project_465000527",
+        cores=64,
+        processes=4,
+        memory="240GB",
+        interface="hsn0",
     )
+
+    cluster.scale(10)
     client = Client(cluster)
+
 
     # Configure logging
     logging.basicConfig(
