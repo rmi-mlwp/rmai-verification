@@ -24,10 +24,6 @@ transformations:
       10s: [S10M, 10s_10]
       msl: [msl_0, MLSP]
   uv_to_speed:
-    datastores:
-     # - stretched-512
-      - lam-512-600km-rollout-fix
-      - cerra
     u: 10u
     v: 10v
     speed: 10s
