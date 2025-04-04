@@ -16,6 +16,7 @@ METRICS = {
 
 LOG = logging.getLogger(__name__)
 
+CHUNKS = {"reference_time" : -1}
 def calculate_metrics(reference : xr.Dataset, dict_of_datasets: Dict[str, xr.Dataset], package : str, metrics : List[str], avg_dims : str | List[str] ):
     LOG.debug(dict_of_datasets.keys())
     metrics_dict = dict()
@@ -28,6 +29,8 @@ def calculate_metrics(reference : xr.Dataset, dict_of_datasets: Dict[str, xr.Dat
             _reference = _reference.sel(valid_time=model["valid_time"])
             print(f"Reference data dimension after aligning: {_reference.sizes}")
             _reference, model = xr.align(_reference,model)
-            _metric[name]=metric(_reference,model,avg_dims)
+            _ref_chunk = _reference.chunk(CHUNKS)
+            model_chunk = model.chunk(CHUNKS)
+            _metric[name]=metric(_ref_chunk,model_chunk,avg_dims)
         metrics_dict[metric_name] = concat_dict_along_keys(_metric, "model")
     return concat_dict_along_keys(metrics_dict, "metric")

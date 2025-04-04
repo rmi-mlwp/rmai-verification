@@ -16,7 +16,7 @@ def common_grid_or_points(datastores : Dict[str, BaseDataStore], reference_datas
     #FIXME: Datastores should have a .coords() classmethod
     common_data = dict()
     if datastores[reference_datastore].is_point:
-        LOG.info(f"reference datastore {reference_datastore} is an ObsDatastore")
+        LOG.info(f"reference datastore {reference_datastore} is a PointDatastore")
         transformer = METHODS["interpolate"]
         transformation = transformer(
             datastores[reference_datastore].data,
@@ -40,8 +40,24 @@ def common_grid_or_points(datastores : Dict[str, BaseDataStore], reference_datas
             common_data[name] = _data
 
     else:
-        LOG.error("Regridding not supported yet")
-        raise NotImplementedError
+        LOG.info(f"reference datastore {reference_datastore} is a GridDatastore")
+        LOG.warning("Regridding not supported yet")
+        for name, store in datastores.items():
+            if store.is_point:
+                LOG.error(f"Cannot transform a point datastore {name} to a grid.")
+                raise ValueError
+            else:
+                # for coord in POINT_COORDS:
+                #     assert coord in list(datastores[reference_datastore].data.coords.keys()), f"Coordinate {coord} missing from the reference datastore {reference_datastore}"
+                LOG.info(f"Fake regridding to reference points for datastore {name}")
+                if store.is_stacked:
+                    LOG.info(f"Unstacking {name}")
+                    store.unstack()
+                _data = store.data
+            common_data[name] = _data
+
+
+        #raise NotImplementedError
         #transformer = get_transformation("regrid")
         #key = "regridding"         
     return common_data
