@@ -10,7 +10,6 @@ from ..transformations.uv_to_speed import UVToSpeed
 
 from typing import List, Union, Tuple, Dict
 
-
 LOG = logging.getLogger(__name__)
 
 COORDS = dict(
