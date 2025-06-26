@@ -1,0 +1,53 @@
+dates:
+  start: 2020-01-02 00:00:00
+  end: 2020-12-31 00:00:00
+  frequency: 1D
+
+datastores:
+  ifs-o96-od-00-global_domain:
+    type: ifs-forecast
+    path: /users/vandenbl/vsc/datasets/ifs-data/ifs-forecast_o96_pl_{yyyy}{mm}{dd}_{HH}.grib
+    subgrid_idx: index_global_domain_o96.npz
+    stacked: false
+    is_surface: false
+    shift_longitude: false
+    max_steps: 24
+    variables: ['q_500', 't_500', 'u_500', 'z_500'] #['u10', 'v10', 'd2m', 't2m', 'msl', 'skt', 'sp']
+
+  era:
+    type: anemoi-inference
+    path: /scratch/project_465000527/vandenbl/sg-la-comparison/inference-out/gl-1024-01-ea-00-era5/{yyyy}{mm}{dd}{HH}.nc
+    subgrid_idx: index_global_domain_o96.npz
+    era_hack: true
+    stacked: false
+    variables: ['q_500', 't_500', 'u_500', 'z_500'] # ['10u', '10v', '2d', '2t', 'msl', 'skt', 'sp']
+transformations:
+  rename:
+    rename_dict:
+      2t: [t2m]
+      10u: [u10]
+      10v: [v10]
+      2d: [d2m]
+  # uv_to_speed:
+  #   datastores:
+  #     - ifs-o96-od-00-global_domain
+  #     - era
+  #   u: 10u
+  #   v: 10v
+  #   speed: 10s
+
+verification:
+  reference_datastore: era    
+  variables : ['q_500', 't_500', 'u_500', 'z_500'] # ['10s', '2d', '2t', 'msl', 'skt', 'sp']
+  clusters:
+    temporal:
+      package : scores
+      metrics:
+        - mse
+        - bias
+      avg_dims: [reference_time]
+
+output:
+  type: netcdf
+  temporal:
+    path: /scratch/project_465000527/vandenbl/sg-la-comparison/scores/ifs-o96-od-00-global_domain_vs_era_small_pl.nc

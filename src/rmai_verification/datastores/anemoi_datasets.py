@@ -40,7 +40,9 @@ class AnemoiDatasets(GridDataStore, ObsDataStore):
 
                  files: str, 
                  variables: Union[List[str], Tuple[str], set] = None, 
-                 mapping: Union[Dict[str,str], str] = None
+                 mapping: Union[Dict[str,str], str] = None,
+                 stacked: bool = True,
+                 subgrid_idx: str = None,
                  ) -> None:
         """Initialize the AnemoiDataset datastore.
 
@@ -59,15 +61,19 @@ class AnemoiDatasets(GridDataStore, ObsDataStore):
             None
         """
         LOG.info("Initializing AnemoiDataset datastore")
-        self._files: Union[str,List[str]] = files
-        self._mapping: Union[Dict[str,str], str]  = mapping
-        self._stacked: bool = True
+        self._files = files
+        self._mapping = mapping
+        self._stacked = stacked
+        self._idx = subgrid_idx
 
         # Open the dataset
         self._data = self._open(variables=variables)
 
         if self._mapping:
             self._data = add_xy(self._data,self._mapping)
+
+        if self._idx:
+            self.sub_grid(self._idx)
     
     def unstack(self,mapping: Union[str, Dict[str,str]] = None):
         """Unstacks the dataset from a stacked format to a grid format.

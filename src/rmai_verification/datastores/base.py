@@ -3,8 +3,6 @@ import xarray as xr
 from numpy.typing import NDArray
 import numpy as np
 from typing import Dict, List, Any, Union
-
-
 class BaseDataStore(abc.ABC):
     """
     Base DataStore class
@@ -131,6 +129,20 @@ class GridDataStore(BaseDataStore):
             None
         """
         pass
+
+    def sub_grid(self, index_file, dim = 'grid_index'):
+        index_info = np.load(index_file)
+        full_grid_lats = index_info['full_grid_lats']
+        full_grid_lons = index_info['full_grid_lons']
+        sub_grid_lats = index_info['sub_grid_lats']
+        sub_grid_lons = index_info['sub_grid_lons']
+        idx = index_info['index']
+        assert np.allclose(full_grid_lats, self.latitudes) and np.allclose(full_grid_lons, self.longitudes), 'incompatible index'
+        self._data = self._data.isel({dim  : idx}).assign_coords({dim : list(range(len(idx)))})
+        assert np.allclose(sub_grid_lats, self.latitudes) and np.allclose(sub_grid_lons, self.longitudes), 'incompatible index'
+        
+        
+
 
 
 class PointDataStore(BaseDataStore):

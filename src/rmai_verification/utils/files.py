@@ -54,7 +54,7 @@ def get_filenames(path_fmt: str ,start : np.datetime64, end : np.datetime64, fre
             MM=date_dt.strftime("%M"),
             SS=date_dt.strftime("%S"),
         )
-        if not os.path.exists(path):
+        if not os.path.exists(path) and not '@' in path:
             LOG.warning(f"File {path} not found for date {date_dt.strftime('%Y%m%d %H:%M')}, skipping file")
             pass
         else:

@@ -89,11 +89,13 @@ def align_spatial(datastores : Dict[str, BaseDataStore], reference_datastore : s
             else:
                 #TODO: We don't necessarily need to unstack here. But then the scores are also multiindexed.
                 # And saving multiindexed data is not yet supported by the xarray backend.
-                ref_store.unstack()
-                store.unstack()
+                if ref_store._stacked:
+                    ref_store.unstack()
+                    store.unstack()
                 common_data[reference_datastore] = ref_store.data
-                if (ref_store.latitudes == store.latitudes).any() and (ref_store.longitudes == store.longitudes).any():
+                if np.allclose(ref_store.latitudes,store.latitudes) and np.allclose(ref_store.longitudes,store.longitudes):
                     common_data[name] = store.data
                 else:               
                     raise NotImplementedError("Regridding is not yet supported")
+                common_data[name] = store.data
     return common_data

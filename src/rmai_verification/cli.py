@@ -50,11 +50,12 @@ def run_slurm(args):
         queue = args.queue,
         account = args.account,
         cores = args.cores,
-        #processes = args.processes,
         memory = args.memory,
-        interface = args.interface
+        interface = args.interface,
+        walltime = args.walltime,
+
     )
-    cluster.scale(jobs=3)
+    cluster.scale(jobs=args.jobs)
     client = Client(cluster)
 
     logging.basicConfig(
@@ -136,6 +137,21 @@ def main():
         default="hsn0",
         help="Network interface to use for the dask workers"
     )
+
+    slurm_parser.add_argument(
+        "--jobs",
+        type=int,
+        default="3",
+        help="How many jobs to scale with."
+    )
+
+    slurm_parser.add_argument(
+        "--walltime",
+        type=str,
+        default="01:00:00",
+        help="Walltime for the jobs in the format HH:MM:SS"
+    )
+
     parser.add_argument(
         "CONFIG",
         type=str,

@@ -39,13 +39,25 @@ class AnemoiInference(GridDataStore,FcstDataStore):
                  files: List[str], 
                  variables: Union[List[str],Tuple[str],set] = None,
                  mapping: Union[Dict[str,str],str] = None,
-                 mf_kwargs: Dict[str,str] = dict()
+                 stacked: bool = True,
+                 subgrid_idx: str = None,
+                 era_hack: bool = False,
+                 mf_kwargs: Dict[str,str] = dict(),
                  ):
         LOG.info("Initializing AnemoiInference datastore")
         # Add the files to the class
         self._files = files #FIXME should we handle file-globbing here?
-        self._mapping: Union[Dict[str],str] = mapping
-        self._stacked: bool = True
+        self._era_hack = era_hack
+        if era_hack:
+          extended_files =[]
+          for file in self._files:
+              for rt in ['00', '06', '12', '18']:
+                  fn = file.replace('00.nc',f"{rt}.nc")
+                  extended_files.append(fn.replace("-00-", f"-{rt}-"))
+          self._files = extended_files  
+        self._mapping = mapping
+        self._stacked = stacked
+        self._idx = subgrid_idx
 
         # Add the xr.open_mfdataset kwargs
         self._mf_kwargs = dict()
@@ -75,6 +87,14 @@ class AnemoiInference(GridDataStore,FcstDataStore):
         
         if self._mapping:
             self._data = add_xy(self._data,self._mapping)
+
+        if era_hack:
+            self._data = self._data.squeeze(dim='lead_time').swap_dims({'reference_time':'valid_time'}).drop_vars(['reference_time', 'lead_time'])
+            self._data.attrs["is_observation"] = True
+            self._is_observation = True
+
+        if self._idx:
+            self.sub_grid(self._idx)
 
         LOG.info("Finished initializing AnemoiInference datastore")
 
@@ -154,6 +174,17 @@ class AnemoiInference(GridDataStore,FcstDataStore):
         )
         self._data = ds_transposed
         self._stacked = False
+
+    def select_valid_times(self,valid_times: Union[List[np.datetime64], NDArray[np.datetime64], xr.DataArray]) -> None:
+        """Subsets the data in the datastore to only contain 
+        the selected valid_times
+
+        Returns:
+            None
+        """
+        assert self._era_hack, "You shouldn't be using this hack!"
+        new_data = self._data.sel(valid_time=valid_times)
+        self._data = new_data
             
 
 def _calc_lead_times(ds: xr.Dataset | xr.DataArray) -> NDArray[np.timedelta64]:
@@ -203,3 +234,4 @@ def _preprocess(ds: xr.Dataset | xr.DataArray) -> xr.Dataset:
         }
     )
     return ds_renamed
+
