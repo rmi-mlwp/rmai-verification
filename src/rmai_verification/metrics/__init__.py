@@ -1,7 +1,7 @@
 import xarray as xr
 import logging
 
-from . import xskill, scrs
+from . import xskill, scrs, rmai
 from typing import List, Dict
 from ..utils.sanitation import concat_dict_along_keys
 
@@ -16,16 +16,21 @@ METRICS = {
         "mse": scrs.mse,
         "bias": scrs.bias,
     },
+    "rmai" : {
+        "act": rmai.act, # activity
+        "nfa": rmai.nfa, #normalized forecast activity
+        "acc": rmai.acc,
+    },
 }
 
 LOG = logging.getLogger(__name__)
 
 def calculate_metrics(reference : xr.Dataset,
-                    
                       dict_of_datasets: Dict[str, xr.Dataset], 
                       package : str, 
                       metrics : List[str], 
-                      avg_dims : str | List[str]
+                      avg_dims : str | List[str],
+                      climatology : str = "",
                       ) -> xr.Dataset:
     """Calculate specified metrics between a reference dataset and multiple model datasets.
 
@@ -45,7 +50,8 @@ def calculate_metrics(reference : xr.Dataset,
             List of metric names to calculate
         avg_dims : str | List[str]
             Dimension(s) over which to average the metrics
-        
+        climatology : str = None
+            Name of the dataset to use as climatology with respect to which to compute anomalies. Optional.
         Returns
         -------
         xr.Dataset
@@ -63,12 +69,18 @@ def calculate_metrics(reference : xr.Dataset,
     metrics_dict = dict()
     #chunks = {dim: -1 for dim in avg_dims}
     #print(reference.chunk(chunks))
+    if climatology:
+        climatology_data = dict_of_datasets.pop(climatology)
+        # probably also better to xr.align this? 
     for metric_name in metrics:
         _metric = dict()
         metric = METRICS[package][metric_name]
         for name, model in dict_of_datasets.items():
             LOG.info(f"Calulating {metric_name} for model {name}")
             reference, model = xr.align(reference,model)
-            _metric[name]=metric(reference, model, avg_dims).compute()
+            args = [model, reference, avg_dims]
+            if climatology:
+                args.insert(2, climatology_data)
+            _metric[name]=metric(*args).compute()
         metrics_dict[metric_name] = concat_dict_along_keys(_metric, "model")
     return concat_dict_along_keys(metrics_dict, "metric")

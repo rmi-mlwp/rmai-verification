@@ -152,6 +152,5 @@ class ClimatologicalForecast(GridDataStore,FcstDataStore):
         for key in ("latitude", "longitude"):
             vals=ds_pp[key].values.astype(np.float32)
             ds_pp = ds_pp.assign_coords({key: ('grid_index', vals)})
-        # ds_pp = ds_pp.transpose('lead_time', 'grid_index', 'valid_time', ...)
-        # To do verification against synops dimensions need to be ordered.... Didn't get it to work so far
+        ds_pp = ds_pp.transpose('reference_time', 'lead_time', 'grid_index', ...)
         return ds_pp

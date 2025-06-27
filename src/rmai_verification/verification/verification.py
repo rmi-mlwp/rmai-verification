@@ -87,6 +87,7 @@ class Verification():
             frequency=self._frequency
         )
         self._reference_datastore = config["verification"]["reference_datastore"]
+        self._climatology_datastore = config["verification"].get("climatology_datastore", "")
 
         apply_transformations(
             datastores=self._datastores, 
@@ -132,12 +133,14 @@ class Verification():
         """
 
         reference = self._aligned_data.pop(self._reference_datastore)
-        broadcast_nans(list(self._aligned_data.values()))
+        if self._config.get('broadcast_nans', True):
+            broadcast_nans(list(self._aligned_data.values()))
         
         clusters = dict()
         for cluster, config in self._config["verification"]["clusters"].items():
             clusters[cluster] = calculate_metrics(
                 reference=reference,
+                climatology=self._climatology_datastore,
                 dict_of_datasets=self._aligned_data,
                 **config
             )
@@ -197,7 +200,3 @@ class Verification():
 
 
 
-
-    
-        
-        
