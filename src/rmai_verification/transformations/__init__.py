@@ -4,13 +4,15 @@ from ..datastores.base import BaseDataStore
 from .rename import Renamer
 from .uv_to_speed import UVToSpeed
 from .kelvin_to_celcius import KelvinToCelcius
+from .hpa_to_pa import HectoPascalToPascal
 
 
 
 TRANSFORMATIONS = {
     "rename": Renamer,
     "uv_to_speed": UVToSpeed,
-    "kelvin_to_celcius": KelvinToCelcius
+    "kelvin_to_celcius": KelvinToCelcius,
+    "hectoPascal_to_Pascal": HectoPascalToPascal,
 }
 
 def apply_transformations(datastores : Dict[str, BaseDataStore], transformations: Dict[str, Dict]) -> None:
