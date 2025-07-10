@@ -26,7 +26,15 @@ class UVToSpeed():
     Currently only supports xarray Dataset inputs. DataArray inputs are not implemented.
     """
    
-    def __init__(self, u : str = "10u", v : str = "10v", speed : str = "10s") -> None:
+    def __init__(self, u : str | list = "10u", v : str | list = "10v", speed : str | list= "10s") -> None:
+        if not isinstance(u, list):
+            u = [u]
+        if not isinstance(v, list):
+            v = [v]
+        if not isinstance(speed, list):
+            speed = [speed]
+        assert len(u) == len(v) == len(speed), "u, v, and speed must have the same length."
+        self.n =len(u)
         self.u_wind = u
         self.v_wind = v
         self.wind_speed = speed
@@ -50,8 +58,9 @@ class UVToSpeed():
         """
 
         if isinstance(input_ds, xr.Dataset):
-            speed = np.sqrt(input_ds[self.u_wind]**2 + input_ds[self.v_wind]**2)
-            input_ds[self.wind_speed] = speed
+            for i in range(self.n):
+                speed = np.sqrt(input_ds[self.u_wind[i]]**2 + input_ds[self.v_wind[i]]**2)
+                input_ds[self.wind_speed[i]] = speed
         elif isinstance(input_ds, xr.DataArray):
             raise NotImplementedError("UVToSpeed does not support DataArray input yet.")
         return input_ds
