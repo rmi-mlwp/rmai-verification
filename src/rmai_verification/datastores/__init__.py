@@ -9,6 +9,7 @@ from ..utils.files import get_filenames
 
 from .anemoi_datasets import AnemoiDatasets
 from .anemoi_inference import AnemoiInference
+from .bris_inference import BrisInference
 from .rmi_re_pytools import RmiRePytoolsForecast, RmiRePytoolsObservation
 from .base import PointObservations
 
@@ -17,6 +18,7 @@ LOG = logging.getLogger(__name__)
 
 DATASTORES = {
     "anemoi-inference": AnemoiInference,
+    "bris-inference": BrisInference,
     "anemoi-datasets" : AnemoiDatasets,
     "rmi-re-pytools-fc": RmiRePytoolsForecast,
     "rmi-re-pytools-obs": RmiRePytoolsObservation,

@@ -12,7 +12,7 @@ POINT_COORDS = ["latitude", "longitude"]
 
 # Tolerance in degrees that the coordinates of two grids can differ while still being interpreted as the same grid.
 # 0.0001 degrees ~ 10m at 45 deg latitude
-COORD_TOLERANCE = 0.0001 
+COORD_TOLERANCE = 0.1 
 
 def align_spatial(datastores : Dict[str, BaseDataStore], reference_datastore : str, transformation_kwargs : Dict[str, str] = dict()) -> Dict[str, xr.Dataset]:
     """Align spatial coordinates of multiple datastores to a reference datastore.
@@ -105,6 +105,16 @@ def align_spatial(datastores : Dict[str, BaseDataStore], reference_datastore : s
                         np.isclose(ref_store.longitudes, store.longitudes, atol=COORD_TOLERANCE).all():
                         LOG.warning(f"Some lat-lon coordinates of datastore {name} and reference datastore {reference_datastore} differ.\n" + 
                                     f"But the difference is less then {COORD_TOLERANCE} degrees, considering both grids as equal")
+                        store = store.data.assign_coords(
+                                    {
+                                        "x": ("x", ref_store.data["x"].data),
+                                        "y": ("y", ref_store.data["y"].data),
+                                        "longitude" : (["y", "x"], ref_store.longitudes),
+                                        "latitude": (["y", "x"], ref_store.latitudes),
+                                    }
+                                )
+                        common_data[name] = store
+
                     else:               
                         raise NotImplementedError("Regridding is not yet supported")
                 else:

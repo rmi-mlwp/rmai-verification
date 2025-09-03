@@ -22,6 +22,26 @@ GRIDS = dict(
       ny=1069
     ),
   ),
+  uwcw=dict(
+    projection="lcc",
+    projection_kws=dict(
+      globe=dict(
+        semimajor_axis=6371229.0,
+        semiminor_axis=6371229.0,
+      ),
+      central_longitude=8.0,
+      central_latitude=50.0,
+      standard_parallels=[50.0, 50.0],
+    ),
+    grid_kws=dict(
+      lower_left=(-25.446747000000016, 39.639006000000016),
+      upper_right=(40.151049804882405, 62.671198981050765),
+      delta_x=2000.0,
+      delta_y=2000.0,
+      nx=1909,
+      ny=1609
+    ),
+  ),
 )
 
 PROJECTIONS=dict(
