@@ -69,46 +69,6 @@ class BrisInference(GridDataStore,FcstDataStore):
             self._data = add_xy(self._data,self._mapping)
 
         LOG.info("Finished initializing BrisInference datastore")
-    
-    @property
-    def longitudes(self) -> NDArray:
-        """Returns the longitudes of the datastore
-        
-        Returns
-            ndarray: 
-        """
-        return self._data["longitude"].values
-
-    @property
-    def latitudes(self) -> NDArray:
-        """Returns the latitudes of the datastore
-        
-        Returns
-            ndarray: 
-        """
-        return self._data["latitude"].values
-    
-    @latitudes.setter
-    def latitudes(self, latitudes: NDArray[np.float64]):
-        """
-        Setter for the latitudes attribute.
-        This method assigns the provided latitudes to the datastore's latitude coordinate.
-        
-        Args:
-            latitudes (NDArray[np.float64]): An array of latitude values to set.
-        """
-        self._latitudes = latitudes
-
-    @longitudes.setter
-    def longitudes(self, longitudes: NDArray[np.float64]): 
-        """
-        Setter for the longitudes attribute.
-        This method assigns the provided longitudes to the datastore's longitude coordinate.
-        
-        Args:
-            longitudes (NDArray[np.float64]): An array of longitude values to set.
-        """
-        self._longitudes = longitudes
 
     def _open(self):
         """
