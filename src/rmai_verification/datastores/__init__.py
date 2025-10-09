@@ -12,6 +12,7 @@ from .anemoi_inference import AnemoiInference
 from .rmi_re_pytools import RmiRePytoolsForecast, RmiRePytoolsObservation
 from .ifs_fcst import IfsForecast
 from .base import PointObservations
+from .xarray_zarr import XarrayZarr
 
 LOG = logging.getLogger(__name__)
 
@@ -22,7 +23,8 @@ DATASTORES = {
     "rmi-re-pytools-fc": RmiRePytoolsForecast,
     "rmi-re-pytools-obs": RmiRePytoolsObservation,
     "point-observations" : PointObservations,
-    "ifs-forecast": IfsForecast
+    "ifs-forecast": IfsForecast,
+    "xarray-zarr" : XarrayZarr
 }
 def load_datastores(datastores : Dict[str, Dict], start_date : str, end_date : str, frequency : str) -> Dict[str, BaseDataStore]:
     """Load datastores

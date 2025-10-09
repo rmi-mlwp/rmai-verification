@@ -76,6 +76,9 @@ class AnemoiInference(GridDataStore,FcstDataStore):
         if self._mapping:
             self._data = add_xy(self._data,self._mapping)
 
+            # Print the dataset after add_xy
+            print("Dataset after add_xy():")
+            LOG.info("Dataset after add_xy(): %s", self._data)
         LOG.info("Finished initializing AnemoiInference datastore")
 
     def _open(self):
@@ -114,6 +117,16 @@ class AnemoiInference(GridDataStore,FcstDataStore):
             }
         )
         ds_coords.attrs["is_observation"] = False
+        
+        LOG.info("Dataset after _open(): %s", ds_coords)
+            
+        grid_points = [0, 1000, 500, 100, 3071580]
+        # Extract latitude and longitude for these grid points
+        for grid_idx in grid_points:
+            lat = float(ds_coords['latitude'].isel(grid_index=grid_idx).values)
+            lon = float(ds_coords['longitude'].isel(grid_index=grid_idx).values)
+            LOG.info("Grid index %d: latitude = %.2f, longitude = %.2f", grid_idx, lat, lon)
+            
         return ds_coords
 
     def unstack(self,mapping: Union[str, Dict[str,str]] = None):
@@ -153,8 +166,12 @@ class AnemoiInference(GridDataStore,FcstDataStore):
             "x"
         )
         self._data = ds_transposed
+        
+        # # Save the transposed dataset to Zarr
+        # zarr_path = "/pfs/lustrep4/scratch/project_465000527/francois/Anemoi/rmai_verification_4uwcwestforecast_v1/rmai-verification/debug_AnemoiInference.zarr"
+        # ds_transposed.to_zarr(zarr_path, mode="w")
         self._stacked = False
-            
+  
 
 def _calc_lead_times(ds: xr.Dataset | xr.DataArray) -> NDArray[np.timedelta64]:
         """
