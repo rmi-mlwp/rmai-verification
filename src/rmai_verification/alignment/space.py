@@ -107,6 +107,7 @@ def align_spatial(datastores : Dict[str, BaseDataStore], reference_datastore : s
                         np.isclose(ref_store.longitudes, store.longitudes, atol=COORD_TOLERANCE).all():
                         LOG.warning(f"Some lat-lon coordinates of datastore {name} and reference datastore {reference_datastore} differ.\n" + 
                                     f"But the difference is less then {COORD_TOLERANCE} degrees, considering both grids as equal")
+                        common_data[name] = store.data
                     else:               
                         raise NotImplementedError("Regridding is not yet supported")
                 else:

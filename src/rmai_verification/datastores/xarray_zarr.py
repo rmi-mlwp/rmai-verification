@@ -76,6 +76,15 @@ class XarrayZarr(GridDataStore,FcstDataStore):
 
             # Alternatively, use logging for better control
             LOG.info("Dataset after add_xy(): %s", self._data)
+        # Force the chunk structure and dtype
+        self._data = self._data.chunk({
+            'reference_time': 1,
+            'lead_time': 11,
+            'grid_index': 3071581
+        }).astype('float32')
+        
+        LOG.info("Dataset after forcing the chynks: %s", self._data)
+
         LOG.info("Finished initializing Xarray-Zarr datastore")
 
     def _open(self, variables: List[str] = None):
@@ -105,6 +114,11 @@ class XarrayZarr(GridDataStore,FcstDataStore):
             ds_selected = ds_postproc
             # if len(ds_selected["variable"]) > 10:
             #     LOG.warning(f"Transforming anemoi-datasets xr.DataArray with {len(ds_postproc['variable'])} variables to xr.Dataset, this might take some time. Consider selecting the relevant variables during initialization")
+        #LAZY FIX
+        # --- Add this block for time selection ---
+        ds_selected = ds_selected.sel(
+            reference_time=slice('2022-10-01', '2023-09-27')
+        )
         # ds_selected["grid_index"]=1
         ds_selected.attrs["is_observation"] = False
 

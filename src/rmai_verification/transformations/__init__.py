@@ -4,13 +4,16 @@ from ..datastores.base import BaseDataStore
 from .rename import Renamer
 from .uv_to_speed import UVToSpeed
 from .kelvin_to_celcius import KelvinToCelcius
+from .specific_humidity_to_dewpoint import SpecificHumidityToDewpoint
 
 
 
 TRANSFORMATIONS = {
     "rename": Renamer,
     "uv_to_speed": UVToSpeed,
-    "kelvin_to_celcius": KelvinToCelcius
+    "kelvin_to_celcius": KelvinToCelcius,
+    "specific_humidity_to_dewpoint": SpecificHumidityToDewpoint
+
 }
 
 def apply_transformations(datastores : Dict[str, BaseDataStore], transformations: Dict[str, Dict]) -> None:
