@@ -71,6 +71,8 @@ class Verification():
 
         if isinstance(config, str):
             config = load_yaml(config)
+            print("Configuration loaded from YAML file")
+            print(config)
         elif not isinstance(config, dict):
             LOG.ERROR("Unsupported config type")
             raise TypeError
@@ -100,7 +102,7 @@ class Verification():
         It also handles the selection of variables based on the configuration.
         The reference datastore is used as the baseline for spatial alignment.
         """
-
+        print("Aligning datastores...")
         select_variables(
             datastores=self._datastores,
             variables=self._config["verification"].get("variables", VERIF_VARS)

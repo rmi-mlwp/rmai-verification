@@ -9,7 +9,7 @@ from typing import List, Dict
 
 LOG = logging.getLogger(__name__)
 
-def get_filenames(path_fmt: str ,start : np.datetime64, end : np.datetime64, frequency: np.timedelta64) -> List[str]:
+def get_filenames(path_fmt: str ,start : np.datetime64, end : np.datetime64, frequency: np.timedelta64, ens_size: int = 1) -> List[str]:
     """Return a list of filenames matching the path format between start and end dates.
     
     This function generates filenames based on a path format string and a date range,
@@ -43,26 +43,41 @@ def get_filenames(path_fmt: str ,start : np.datetime64, end : np.datetime64, fre
     """
     filenames = []
     date = start
+    ens_idx = 1 
+    print("ens_size: ", ens_size)
     while date <= end:
-        date_dt = date.astype(datetime)
-        path = path_fmt.format(
-            yyyy=date_dt.strftime("%Y"),
+        for ens_idx in range(1, ens_size + 1):
+            date_dt = date.astype(datetime)
+            print("date_dt: ", date_dt)
+            print("ens_idx: ", ens_idx)
+            print("Generating path for date: ", date_dt.strftime("%Y%m%d %H:%M"))
+            path = path_fmt.format(
+                yyyy=date_dt.strftime("%Y"),
             yy=date_dt.strftime("%y"),
             mm=date_dt.strftime("%m"),
             dd=date_dt.strftime("%d"),
             HH=date_dt.strftime("%H"),
             MM=date_dt.strftime("%M"),
             SS=date_dt.strftime("%S"),
+            x=str(ens_idx)
         )
-        if not os.path.exists(path):
-            LOG.warning(f"No file found for date {date_dt.strftime('%Y%m%d %H:%M')}, skipping file")
-            pass
-        else:
-            filenames.append(path)
+            print(f"Checking for file: {path}")
+            if not os.path.exists(path):
+                LOG.warning(f"No file found for date {date_dt.strftime('%Y%m%d %H:%M')}, skipping file")
+                print(f"File not found: {path}")
+                pass
+            else:
+                filenames.append(path)
+                LOG.info(f"Found file: {path}")
+                print(f"File found: {path}")
         date += frequency
     filenames = list(set(filenames))
+    LOG.info(f"Total files found: {len(filenames)}")
+    print(f"Total files found: {len(filenames)}")
     if len(filenames) == 1: 
         filenames = filenames[0]
+        LOG.info("Only one file found, returning as string instead of list")
+        print("Only one file found, returning as string instead of list")
     return filenames
 
 def write_yaml(x: Dict, fn: str, sort_keys: bool = False) -> None:
