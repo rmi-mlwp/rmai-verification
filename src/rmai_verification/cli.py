@@ -61,12 +61,12 @@ def run_slurm(args):
         # account = args.account,
         cores = args.cores,
         #processes = args.processes,
+        interface = "ib0",
         memory = args.memory,
-        interface = args.interface,
-        job_extra_directives=[f"--qos={args.qos}"],
-        walltime = args.time
+        job_extra_directives = ["--qos=np"],
+        walltime = "02:00:00",
     )
-    cluster.scale(jobs=3)
+    cluster.scale(jobs=10)
     client = Client(cluster)
 
     logging.basicConfig(
@@ -146,20 +146,12 @@ def main():
         help="Total amount of memory to be used by all workers inside a job"
     )
 
-    slurm_parser.add_argument(
-        "--interface",
-        type=str,
-        default="hsn0",
-        help="Network interface to use for the dask workers"
-    )
-
-    slurm_parser.add_argument(
-        "--time",
-        type=str,
-        default="2:00:00",
-        help="Walltime for the SLURM job"
-    )
-
+    # slurm_parser.add_argument(
+    #     "--interface",
+    #     type=str,
+    #     default="hsn0",
+    #     help="Network interface to use for the dask workers"
+    # )
     parser.add_argument(
         "CONFIG",
         type=str,

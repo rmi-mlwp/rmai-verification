@@ -12,7 +12,7 @@ POINT_COORDS = ["latitude", "longitude"]
 
 # Tolerance in degrees that the coordinates of two grids can differ while still being interpreted as the same grid.
 # 0.0001 degrees ~ 10m at 45 deg latitude
-COORD_TOLERANCE = 0.1 
+COORD_TOLERANCE = 0.001 
 
 def align_spatial(datastores : Dict[str, BaseDataStore], reference_datastore : str, transformation_kwargs : Dict[str, str] = dict()) -> Dict[str, xr.Dataset]:
     """Align spatial coordinates of multiple datastores to a reference datastore.
@@ -94,6 +94,9 @@ def align_spatial(datastores : Dict[str, BaseDataStore], reference_datastore : s
                 if store._mapping:
                     store.unstack()
                 # Check if shape of the coordinates is equal 
+                print("checking shapes of datastore grids")
+                print("MEPS", ref_store.latitudes.shape)
+                print("prediction", store.latitudes.shape)
                 if (ref_store.latitudes.shape == store.latitudes.shape) and \
                     (ref_store.longitudes.shape == store.longitudes.shape):
                     #TODO: We don't necessarily need to unstack here. But then the scores are also multiindexed.
@@ -115,9 +118,15 @@ def align_spatial(datastores : Dict[str, BaseDataStore], reference_datastore : s
                                 )
                         common_data[name] = store
 
-                    else:               
+                    else:
+                        print("coords are not matching")             
+                        print("ref lat:", ref_store.latitudes)  
+                        print("store lat:", store.latitudes)
+                        print("ref lon:", ref_store.longitudes)
+                        print("store lon:", store.longitudes)
                         raise NotImplementedError("Regridding is not yet supported")
                 else:
+                    print("shapes not equal")
                     raise NotImplementedError("Regridding is not yet supported")
 
     return common_data

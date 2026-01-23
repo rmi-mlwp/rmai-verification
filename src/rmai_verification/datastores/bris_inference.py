@@ -36,6 +36,7 @@ class BrisInference(GridDataStore,FcstDataStore):
         LOG.info("Initializing BrisInference datastore")
         # Add the files to the class
         self._files = files #FIXME should we handle file-globbing here?
+        LOG.info("Files", self._files)
         self._mapping: Union[Dict[str],str] = mapping
         self._stacked: bool = False
 
@@ -82,14 +83,15 @@ class BrisInference(GridDataStore,FcstDataStore):
             xarray.Dataset: The processed dataset with assigned coordinates and
             attributes.
         """
+        LOG.info("Files", self._files)
         ds = xr.open_mfdataset(
             self._files,
             preprocess=_preprocess,
             chunks={
                 "reference_time" : 1,
                 "time": 1,
-                "x": 200,
-                "y": 200
+                "x": 500,
+                "y": 500
             },
             **self._mf_kwargs,
         )
@@ -103,8 +105,8 @@ class BrisInference(GridDataStore,FcstDataStore):
                     ds["reference_time"].data[:,np.newaxis] + \
                         self._lead_times[np.newaxis,:]
                 ),
-                "longitude" : (["y", "x"], self._longitudes),
-                "latitude": (["y", "x"], self._latitudes),
+                "longitude" : (["x", "y"], self._longitudes.T),
+                "latitude": (["x", "y"], self._latitudes.T),
             }
         )
         ds_coords.attrs["is_observation"] = False

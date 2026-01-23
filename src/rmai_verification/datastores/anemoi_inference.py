@@ -114,9 +114,9 @@ class AnemoiInference(GridDataStore,FcstDataStore):
                     "reference_time" : 1,
                     "time": -1,
                     "values": -1,
-                    "ensemble": -1
+                    "ensemble_member": -1
                 },
-                concat_dim="ensemble",
+                concat_dim="ensemble_member",
                 combine="nested",
                 **self._mf_kwargs,
             )   
@@ -132,6 +132,7 @@ class AnemoiInference(GridDataStore,FcstDataStore):
                 ),
                 "longitude" : ("grid_index", self._longitudes),
                 "latitude": ("grid_index", self._latitudes),
+                "ensemble_member": ("ensemble_member", np.arange(1,self.ens_size+1)) if self.ens_size > 1 else None,
             }
         )
         ds_coords.attrs["is_observation"] = False
@@ -171,7 +172,8 @@ class AnemoiInference(GridDataStore,FcstDataStore):
             "reference_time",
             "lead_time",
             "y",
-            "x"
+            "x",
+            "ensemble_member" if "ensemble_member" in ds_unstacked.dims else None,
         )
         self._data = ds_transposed
         self._stacked = False

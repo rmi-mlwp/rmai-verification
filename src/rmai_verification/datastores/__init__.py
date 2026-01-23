@@ -47,6 +47,9 @@ def load_datastores(datastores : Dict[str, Dict], start_date : str, end_date : s
         print("name: ", name)
         print("config: ", config)
         print("ens_size in config: ", config.get("ens_size", None))
+        print("name: ", name)
+        print("config: ", config)
+        print("ens_size in config: ", config.get("ens_size", None))
         files = get_filenames(
             path_fmt=config.pop("path"),
             start=start_date,
