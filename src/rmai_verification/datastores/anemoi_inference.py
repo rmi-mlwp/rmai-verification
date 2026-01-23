@@ -43,8 +43,6 @@ class AnemoiInference(GridDataStore,FcstDataStore):
         LOG.info("Initializing AnemoiInference datastore")
         # Add the files to the class
         self._files = files #FIXME should we handle file-globbing here?
-        print("Number of files provided: ", len(self._files))
-        print("Filenames: ", self._files)
         self._mapping: Union[Dict[str],str] = mapping
         self._stacked: bool = True
         self.ens_size = ens_size
@@ -67,7 +65,6 @@ class AnemoiInference(GridDataStore,FcstDataStore):
 
         # Get the lead times
         self._lead_times = _calc_lead_times(ds)
-        print("Lead times: ", self._lead_times)
 
         ds.close()
 
@@ -79,7 +76,6 @@ class AnemoiInference(GridDataStore,FcstDataStore):
         if self._mapping:
             self._data = add_xy(self._data,self._mapping)
         
-        print("Finished initializing AnemoiInference datastore")
         LOG.info("Finished initializing AnemoiInference datastore")
 
     def _open(self):
@@ -120,7 +116,6 @@ class AnemoiInference(GridDataStore,FcstDataStore):
                 combine="nested",
                 **self._mf_kwargs,
             )   
-        print("Dataset opened", ds)
         ds_coords = ds.assign_coords(
             {
                 "lead_time": ("lead_time", self._lead_times),
@@ -194,15 +189,6 @@ def _calc_lead_times(ds: xr.Dataset | xr.DataArray) -> NDArray[np.timedelta64]:
             numpy.ndarray: An array of lead times relative to the first time value.
         """
         return (ds["time"]- ds["time"][0]).data
-        # print(ds)
-        # print("Calculating lead times:")
-        # print("Reference time: ", ds.coords["reference_time"].data)
-        # print("Time values: ", ds["time"].data)
-        # print("First time value: ", ds["time"][0].data)
-        # print("Reference lead times calculated: ", (ds.coords["reference_time"]- ds["time"][0]).data)
-        # print("Lead times calculated: ", (ds["time"]- ds["time"][0]).data)
-        # print(type((ds.coords["reference_time"]- ds["time"][0]).data))
-        # return (ds.coords["reference_time"]- ds["time"][0]).data + (ds["time"]- ds["time"][0]).data
 
 def _preprocess(ds: xr.Dataset | xr.DataArray) -> xr.Dataset:
     """
