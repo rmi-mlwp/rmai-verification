@@ -40,7 +40,9 @@ class AnemoiDatasets(GridDataStore, ObsDataStore):
 
                  files: str, 
                  variables: Union[List[str], Tuple[str], set] = None, 
-                 mapping: Union[Dict[str,str], str] = None
+                 mapping: Union[Dict[str,str], str] = None,
+                 trim_edge: List[float] = None,
+                 area: List[float] = None
                  ) -> None:
         """Initialize the AnemoiDataset datastore.
 
@@ -66,8 +68,28 @@ class AnemoiDatasets(GridDataStore, ObsDataStore):
         # Open the dataset
         self._data = self._open(variables=variables)
 
+        if area:
+            lats = self._data.latitude.values
+            lons = self._data.longitude.values
+            north, west, south, east = area
+            mask = (
+            (lats > south)
+            & (lats < north)
+            & (
+                ((lons > west) & (lons < east))
+                | ((lons > west + 360) & (lons < east + 360))
+                | ((lons > west - 360) & (lons < east - 360))
+            )
+            )
+            inds = np.array(range(len(lats)))[mask]
+            self._data = self._data.isel(grid_index = inds)
+        
         if self._mapping:
             self._data = add_xy(self._data,self._mapping)
+        
+        if trim_edge:
+            self.unstack()
+            self._data = self._data.isel(y=slice(trim_edge[0], -trim_edge[1]), x=slice(trim_edge[2], -trim_edge[3]))
     
     def unstack(self,mapping: Union[str, Dict[str,str]] = None):
         """Unstacks the dataset from a stacked format to a grid format.
