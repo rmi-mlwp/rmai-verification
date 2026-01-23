@@ -15,6 +15,7 @@ METRICS = {
         "rmse": scrs.rmse,
         "mse": scrs.mse,
         "bias": scrs.bias,
+        "crps": scrs.crps,
     },
 }
 
@@ -69,6 +70,6 @@ def calculate_metrics(reference : xr.Dataset,
         for name, model in dict_of_datasets.items():
             LOG.info(f"Calulating {metric_name} for model {name}")
             reference, model = xr.align(reference,model)
-            _metric[name]=metric(reference, model, avg_dims).compute()
+            _metric[name]=metric(model, reference, avg_dims).compute()
         metrics_dict[metric_name] = concat_dict_along_keys(_metric, "model")
     return concat_dict_along_keys(metrics_dict, "metric")
