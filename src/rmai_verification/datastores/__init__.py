@@ -44,12 +44,6 @@ def load_datastores(datastores : Dict[str, Dict], start_date : str, end_date : s
     frequency = to_timedelta64(frequency)
 
     for name, config in datastores.items():
-        print("name: ", name)
-        print("config: ", config)
-        print("ens_size in config: ", config.get("ens_size", None))
-        print("name: ", name)
-        print("config: ", config)
-        print("ens_size in config: ", config.get("ens_size", None))
         files = get_filenames(
             path_fmt=config.pop("path"),
             start=start_date,

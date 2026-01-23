@@ -43,7 +43,7 @@ def get_filenames(path_fmt: str ,start : np.datetime64, end : np.datetime64, fre
     """
     filenames = []
     date = start
-    ens_idx = 1 
+    ens_idx = 0 
     print("ens_size: ", ens_size)
     while date <= end:
         for ens_idx in range(1, ens_size + 1):
