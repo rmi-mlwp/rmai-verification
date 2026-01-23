@@ -50,23 +50,24 @@ def run_slurm(args):
     sys.stdout = log_file
     sys.stderr = log_file
     print("Starting SLURM cluster with the following parameters:")
-    print(f"  Queue: {args.qos}")
+    print(f"  Queue: {args.queue}")
     print(f"  Cores: {args.cores}")
     print(f"  Memory: {args.memory}")
-    print(f"  Interface: {args.interface}")
-    print(f"  Walltime: {args.time}")
-    print(f"  Job extra directives: --qos=np")
+    # print(f"  Interface: {args.interface}")
+    # print(f"  Walltime: {args.time}")
+    print(f"  Job extra directives: --qos=normal")
     print("Starting RMAI Verification CLI")
     cluster = SLURMCluster(
-        # account = args.account,
+        queue = args.queue,
+        account = args.account,
         cores = args.cores,
         #processes = args.processes,
         interface = "ib0",
         memory = args.memory,
-        job_extra_directives = ["--qos=np"],
+        job_extra_directives = ["--qos=normal"],
         walltime = "02:00:00",
     )
-    cluster.scale(jobs=10)
+    cluster.scale(jobs=3)
     client = Client(cluster)
 
     logging.basicConfig(
@@ -121,7 +122,7 @@ def main():
     )
 
     slurm_parser.add_argument(
-        "--qos",
+        "--queue",
         type=str,
         help="Destination queue for the worker jobs"
     )
@@ -179,8 +180,8 @@ if __name__ == "__main__":
         format=LOG_FORMAT, 
         datefmt=DATE_FORMAT,
         handlers=[
-            #logging.FileHandler("app.log"),  # Log to a file
-            logging.StreamHandler()          # Log to console
+            logging.FileHandler("output.log", mode='w'),  # Log to a file
+            # logging.StreamHandler()          # Log to console
         ]
     )
 
