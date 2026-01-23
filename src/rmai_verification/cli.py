@@ -45,27 +45,14 @@ def run_slurm(args):
     from dask.distributed import Client
     from dask_jobqueue import SLURMCluster
     from .verification.verification import Verification
-    import sys
-    log_file = open("output.log", "a", buffering=1)  # buffering=1 for line buffering
-    sys.stdout = log_file
-    sys.stderr = log_file
-    print("Starting SLURM cluster with the following parameters:")
-    print(f"  Queue: {args.queue}")
-    print(f"  Cores: {args.cores}")
-    print(f"  Memory: {args.memory}")
-    # print(f"  Interface: {args.interface}")
-    # print(f"  Walltime: {args.time}")
-    print(f"  Job extra directives: --qos=normal")
-    print("Starting RMAI Verification CLI")
+    
     cluster = SLURMCluster(
         queue = args.queue,
         account = args.account,
         cores = args.cores,
         #processes = args.processes,
-        interface = "ib0",
         memory = args.memory,
-        job_extra_directives = ["--qos=normal"],
-        walltime = "02:00:00",
+        interface = args.interface
     )
     cluster.scale(jobs=3)
     client = Client(cluster)
@@ -75,20 +62,16 @@ def run_slurm(args):
         format=LOG_FORMAT, 
         datefmt=DATE_FORMAT,
         handlers=[
-            logging.FileHandler("output.log"),  # Log to a file
-            # logging.StreamHandler()          # Log to console
+            #logging.FileHandler("app.log"),  # Log to a file
+            logging.StreamHandler()          # Log to console
         ]
     )
-    print("Dask SLURM cluster started")
-    print("Begin verification process")
+
     verif = Verification(args.CONFIG)
-    print("Verification object created, starting verification")
     try:
         verif.verify()
-        print("Verification process completed successfully")
     except:
         LOG.error("Error during verfication closing down dask cluster",exc_info=True)
-        print("Error during verification, closing down dask cluster")
         client.close()
         cluster.close()
         sys.exit(1)
@@ -147,12 +130,12 @@ def main():
         help="Total amount of memory to be used by all workers inside a job"
     )
 
-    # slurm_parser.add_argument(
-    #     "--interface",
-    #     type=str,
-    #     default="hsn0",
-    #     help="Network interface to use for the dask workers"
-    # )
+    slurm_parser.add_argument(
+        "--interface",
+        type=str,
+        default="hsn0",
+        help="Network interface to use for the dask workers"
+    )
     parser.add_argument(
         "CONFIG",
         type=str,
@@ -180,13 +163,10 @@ if __name__ == "__main__":
         format=LOG_FORMAT, 
         datefmt=DATE_FORMAT,
         handlers=[
-            logging.FileHandler("output.log", mode='w'),  # Log to a file
-            # logging.StreamHandler()          # Log to console
+            #logging.FileHandler("app.log"),  # Log to a file
+            logging.StreamHandler()          # Log to console
         ]
     )
 
     LOG.info("Starting RMAI Verification CLI")
     main()
-
-    
-
