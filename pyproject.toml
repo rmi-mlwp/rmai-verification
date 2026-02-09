@@ -24,6 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 cluster = ["dask-jobqueue (>=0.8)"]
+scores  = ["scores (>=2.0.0)"]
 dev = [
     "dask-jobqueue (>=0.8)", 
     "poetry (>=2.0)",
@@ -37,9 +38,6 @@ packages = [{include = "rmai_verification", from = "src"}]
 
 [tool.poetry.scripts]
 rmai-verification = "rmai_verification.cli:main"
-
-[tool.poetry.group.scores.dependencies]
-scores = "^2.0.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
