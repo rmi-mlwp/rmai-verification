@@ -22,6 +22,27 @@ GRIDS = dict(
       ny=1069
     ),
   ),
+  alaro4km=dict(
+    projection="lcc",
+    projection_kws=dict(
+      globe=dict(
+        semimajor_axis=6371229.0,
+        semiminor_axis=6371229.0,
+      ),
+      central_longitude=3.7,
+      central_latitude=51.07,
+      standard_parallels=[51.07, 51.07],
+    ),
+    grid_kws=dict(
+      lower_left=(-6.5677443, 43.014187),
+      upper_right=(17.888363, 57.87745),
+      delta_x=4000.0,
+      delta_y=4000.0,
+      nx=421,
+      ny=421
+      
+    ),
+  ),
 )
 
 PROJECTIONS=dict(
