@@ -5,7 +5,7 @@ import numpy as np
 
 LOG = logging.getLogger(__name__)
 
-def plot_overview(dataset, prefix, x="lead_time", y=None, hue="model", **kwargs):
+def plot_overview(dataset, prefix, x="lead_time", y=None, hue="model", avg_dims=None, avg_method="mean", **kwargs):
     total_plots = int(len(dataset["metric"]))
     cols_per_page = 2 #min(total_plots, 2)
     rows_per_page = 2 #(int(total_plots/cols_per_page), 1)
@@ -47,9 +47,19 @@ def plot_overview(dataset, prefix, x="lead_time", y=None, hue="model", **kwargs)
                     ylabel = data["metric"].values[i_metric]
                     LOG.info(f"Plotting metric: {ylabel}")
                     ax = axs.flat[i_ax]
-                    data.isel(
+                    da = data.isel(
                         metric=i_metric
-                    ).plot(
+                    )
+                    
+                    if avg_dims is not None:
+                        if avg_method == "mean":
+                            da = da.mean(dim=avg_dims)
+                        elif avg_method == "median":
+                            da = da.median(dim=avg_dims)
+                        else:
+                            raise ValueError(f"Unknown avg_method: {avg_method}")
+                        
+                    da.plot(
                         x=x,
                         y=y,
                         hue=hue,
