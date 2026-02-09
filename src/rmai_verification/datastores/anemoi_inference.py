@@ -1,9 +1,12 @@
 import xarray as xr
 import numpy as np
+import zarr
 import logging
+import os
+import shutil
 
 from numpy.typing import NDArray
-from typing import List, Tuple, Dict, Union
+from typing import List, Tuple, Dict, Union, Sequence, Iterator, Optional
 
 from .base import GridDataStore, FcstDataStore
 from ..grids.grid_mapping import add_xy
@@ -34,16 +37,27 @@ MF_KWARGS = {
 }
 
 
+def _chunked(seq: Sequence[str], n: int) -> Iterator[List[str]]:
+    for i in range(0, len(seq), n):
+        yield list(seq[i : i + n])
+
+
 class AnemoiInference(GridDataStore,FcstDataStore):
-    def __init__(self, 
-                 files: List[str], 
-                 variables: Union[List[str],Tuple[str],set] = None,
-                 mapping: Union[Dict[str,str],str] = None,
-                 mf_kwargs: Dict[str,str] = dict()
-                 ):
+    def __init__(
+            self, 
+            files: List[str], 
+            variables: Union[List[str],Tuple[str],set] = None,
+            mapping: Union[Dict[str,str],str] = None,
+            mf_kwargs: Dict[str,str] = dict(),
+            *,
+            zarr_path: Optional[str] = None,
+            # use_zarr_if_available: bool = True, TO DO? Don't create zarr if it already exists
+        ):
+
         LOG.info("Initializing AnemoiInference datastore")
+
         # Add the files to the class
-        self._files = files #FIXME should we handle file-globbing here?
+        self._files = files  #FIXME should we handle file-globbing here?
         self._mapping: Union[Dict[str],str] = mapping
         self._stacked: bool = True
 
@@ -56,6 +70,14 @@ class AnemoiInference(GridDataStore,FcstDataStore):
                 self._mf_kwargs[key] = value
         
     
+        # If user passed a zarr_path and wants to use it, open it directly (fast path)
+        self._zarr_path = zarr_path
+
+        # TO DO: Get dir from zarr_path and check if it exists, if not, create it. This way we can use zarr even if the user doesn't provide a path, as long as they want to use zarr and have a default directory for it.
+        if zarr_path:
+            zarr_dir = os.path.dirname(zarr_path)
+            os.makedirs(zarr_dir, exist_ok=True)
+
         # open a single dataset to infer some properties
         ds = xr.open_dataset(self._files[0],engine=self._mf_kwargs["engine"])
 
@@ -68,8 +90,16 @@ class AnemoiInference(GridDataStore,FcstDataStore):
 
         ds.close()
 
+        if zarr_path and os.path.exists(zarr_path):
+            # fast path: open existing zarr
+            self._data = xr.open_zarr(zarr_path, consolidated=True)
+        elif zarr_path:
+            # build it once, then open
+            self._to_zarr(zarr_path, batch_size=200, overwrite=False, consolidated=True)
+            self._data = xr.open_zarr(zarr_path, consolidated=True)
+        else:
+            self._data = self._open_netcdf()
 
-        self._data = self._open()
         if variables:
             self.select_variables(variables)
         
@@ -78,7 +108,7 @@ class AnemoiInference(GridDataStore,FcstDataStore):
 
         LOG.info("Finished initializing AnemoiInference datastore")
 
-    def _open(self):
+    def _open_netcdf(self):
         """
         Opens and processes multiple NetCDF datasets into an xarray Dataset with
         assigned coordinates and attributes.
@@ -115,6 +145,74 @@ class AnemoiInference(GridDataStore,FcstDataStore):
         )
         ds_coords.attrs["is_observation"] = False
         return ds_coords
+
+    
+    def _to_zarr(
+        self,
+        zarr_path: str,
+        *,
+        batch_size: int = 200,
+        variables: Union[List[str], Tuple[str, ...], set, None] = None,
+        # chunking: Optional[Dict[str, int]] = None,
+        overwrite: bool = False,
+        consolidated: bool = True,
+        ):
+        """
+        One-time ETL: convert many NetCDF forecast files to a single Zarr store.
+
+        - Writes in batches and appends along 'reference_time'
+        - Optionally subsets variables before writing
+        - Rechunks for good Zarr read performance
+
+        Returns the zarr_path.
+        """
+
+        if os.path.exists(zarr_path):
+            if overwrite:
+                shutil.rmtree(zarr_path)
+            else:
+                return zarr_path
+
+        first = True
+        for bi, batch in enumerate(_chunked(self._files, batch_size), start=1):
+            LOG.info(f"Zarr conversion batch {bi}: {len(batch)} files -> {zarr_path}")
+
+            ds = xr.open_mfdataset(
+                batch,
+                preprocess=_preprocess,
+                # reading chunking: keep tasks manageable (esp grid_index)
+                chunks={"reference_time": 1, "time": -1, "values": -1},
+                **self._mf_kwargs,
+            )
+
+            ds_coords = ds.assign_coords(
+                {
+                    "lead_time": ("lead_time", self._lead_times),
+                    "grid_index": ("grid_index", np.arange(ds.sizes["grid_index"])),
+                    "valid_time": (
+                        ["reference_time", "lead_time"],
+                        ds["reference_time"].data[:,np.newaxis] + \
+                            self._lead_times[np.newaxis,:]
+                    ),
+                    "longitude" : ("grid_index", self._longitudes),
+                    "latitude": ("grid_index", self._latitudes),
+                }
+            )
+            ds_coords.attrs["is_observation"] = False
+
+            if first:
+                ds_coords.to_zarr(zarr_path, mode="w", consolidated=False)
+                first = False
+            else:
+                ds_coords.to_zarr(zarr_path, mode="a", append_dim="reference_time", consolidated=False)
+
+            ds.close()
+
+        if consolidated:
+            zarr.consolidate_metadata(zarr_path)
+
+        return zarr_path
+
 
     def unstack(self,mapping: Union[str, Dict[str,str]] = None):
         """Unstacks the dataset from a stacked format to a grid format.
@@ -188,7 +286,7 @@ def _preprocess(ds: xr.Dataset | xr.DataArray) -> xr.Dataset:
 
     reference_time = ds["time"].data[0]
     
-    ds_pruned = ds.drop_vars(DROP_VARS)
+    ds_pruned = ds.drop_vars(DROP_VARS, errors="ignore")
     ds_reftime = ds_pruned.expand_dims(
         reference_time=[reference_time]
     )
