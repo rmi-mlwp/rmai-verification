@@ -73,7 +73,7 @@ Additionally datastore specific keywords can be provided in the config.
 
 For `anemoi-inference` datastores, you can optimize data reading performance:
 - `chunks`: Custom chunking strategy (dict) for dask arrays. Specify chunks using the **original dimension names** from the NetCDF files (`time`, `values`) before they are renamed to `lead_time` and `grid_index`. Default is `{"reference_time": 1, "time": -1, "values": -1}`.
-- `mf_kwargs`: Additional keyword arguments passed to `xarray.open_mfdataset`
+- `mf_kwargs`: Additional keyword arguments passed to `xarray.open_mfdataset`. Note: The default file locking mechanism (SerializableLock) is automatically used to prevent race conditions in distributed environments. Do not set `lock=False`.
 
 example:
 ```yaml
