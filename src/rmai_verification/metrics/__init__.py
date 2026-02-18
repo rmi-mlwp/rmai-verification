@@ -74,7 +74,7 @@ def calculate_metrics(reference : xr.Dataset,
         Notes
         -----
         - Input datasets are aligned before metric calculation
-        - Metrics are computed using dask with .compute() call
+        - Metrics are computed variable-by-variable to reduce memory usage
         - Results are concatenated first across models, then across metrics
     """
     
@@ -86,10 +86,40 @@ def calculate_metrics(reference : xr.Dataset,
         _metric = dict()
         metric = METRICS[package][metric_name]
         for name, model in dict_of_datasets.items():
-            LOG.info(f"Calulating {metric_name} for model {name}")
+            LOG.info(f"Calculating {metric_name} for model {name}")
             reference_aligned, model_aligned = xr.align(reference, model)
-            _metric[name]=metric(reference_aligned, model_aligned, avg_dims).compute()
-            # Clear GPU memory after each metric computation to prevent OOM
+            
+            # Compute metrics variable-by-variable to reduce memory usage
+            # This prevents OOM errors when working with large datasets
+            result_lazy = metric(reference_aligned, model_aligned, avg_dims)
+            
+            # Free aligned datasets early to reduce memory pressure
+            del reference_aligned, model_aligned
+            
+            # Handle both Dataset and DataArray return types
+            if isinstance(result_lazy, xr.DataArray):
+                # For DataArray, just compute directly
+                LOG.debug(f"Computing {metric_name} for DataArray in model {name}")
+                _metric[name] = result_lazy.compute()
+                clear_gpu_memory()
+            else:
+                # For Dataset, process each data variable separately
+                computed_vars = {}
+                # Get all variable references first to avoid repeated graph traversals
+                var_names = list(result_lazy.data_vars)
+                for var_name in var_names:
+                    LOG.debug(f"Computing {metric_name} for variable {var_name} in model {name}")
+                    var_data = result_lazy[var_name]
+                    computed_vars[var_name] = var_data.compute()
+                    # Clear GPU memory after each variable computation
+                    clear_gpu_memory()
+                
+                # Reconstruct the dataset with computed variables
+                _metric[name] = xr.Dataset(computed_vars, attrs=result_lazy.attrs)
+            
+            # Free the lazy result to avoid holding references
+            del result_lazy
+            # Clear GPU memory after each model
             clear_gpu_memory()
         metrics_dict[metric_name] = concat_dict_along_keys(_metric, "model")
         # Clear GPU memory after concatenating metrics for a metric type
