@@ -178,6 +178,12 @@ class Verification():
         self._end = config["dates"]["end"]
         self._frequency = config["dates"]["frequency"]
         self._output_type = config["output"].get("type",None)
+        
+        # Profile datastore loading
+        profiler = get_profiler()
+        if profiler:
+            profiler.start_stage("load_datastores")
+        
         self._datastores = load_datastores(
             datastores=self._config["datastores"],
             start_date=self._start,
@@ -185,11 +191,21 @@ class Verification():
             frequency=self._frequency
         )
         self._reference_datastore = config["verification"]["reference_datastore"]
+        
+        if profiler:
+            profiler.end_stage("load_datastores")
+        
+        # Profile transformations
+        if profiler:
+            profiler.start_stage("apply_transformations")
 
         apply_transformations(
             datastores=self._datastores, 
             transformations=self._config["transformations"]
         )
+        
+        if profiler:
+            profiler.end_stage("apply_transformations")
 
     def align_datastores(self) -> None:
         """Align all datastores in time and space.
