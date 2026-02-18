@@ -6,7 +6,7 @@ import os
 import shutil
 
 from numpy.typing import NDArray
-from typing import List, Tuple, Dict, Union, Sequence, Iterator, Optional
+from typing import List, Tuple, Dict, Union, Sequence, Iterator, Optional, Any
 
 from .base import GridDataStore, FcstDataStore
 from ..grids.grid_mapping import add_xy
@@ -38,6 +38,13 @@ MF_KWARGS = {
     "lock": False,  # Disable locking for better performance with dask
 }
 
+# Default chunking strategy for lazy loading
+DEFAULT_CHUNKS = {
+    "reference_time": 1,
+    "time": -1,
+    "values": -1
+}
+
 
 # def _chunked(seq: Sequence[str], n: int) -> Iterator[List[str]]:
 #     for i in range(0, len(seq), n):
@@ -50,8 +57,8 @@ class AnemoiInference(GridDataStore,FcstDataStore):
             files: List[str], 
             variables: Union[List[str],Tuple[str],set] = None,
             mapping: Union[Dict[str,str],str] = None,
-            mf_kwargs: Dict[str,str] = dict(),
-            chunks: Optional[Dict[str,int]] = None,
+            mf_kwargs: Dict[str, Any] = dict(),
+            chunks: Optional[Dict[str, Union[int, str, Tuple]]] = None,
             # *,
             # zarr_path: Optional[str] = None,
             # use_zarr_if_available: bool = True, TO DO? Don't create zarr if it already exists
@@ -73,11 +80,7 @@ class AnemoiInference(GridDataStore,FcstDataStore):
                 self._mf_kwargs[key] = value
         
         # Store custom chunks if provided, otherwise use defaults
-        self._chunks = chunks if chunks is not None else {
-            "reference_time": 1,
-            "time": -1,
-            "values": -1
-        }
+        self._chunks = chunks if chunks is not None else DEFAULT_CHUNKS
         
     
         # If user passed a zarr_path and wants to use it, open it directly (fast path)
