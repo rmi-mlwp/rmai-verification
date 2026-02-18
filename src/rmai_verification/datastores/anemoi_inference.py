@@ -29,13 +29,13 @@ DROP_VARS = [
 ]
 
 MF_KWARGS = {
-    "engine":"h5netcdf",
-    "combine":"by_coords",
-    "parallel":False,  # Let dask handle parallelization to avoid overhead
+    "engine": "h5netcdf",
+    "combine": "by_coords",
+    "parallel": False,  # Let dask handle parallelization to avoid overhead
     "concat_dim": None,
-    "data_vars":"minimal",
-    "decode_times":True,  # Decode times for proper temporal handling
-    "lock":False,  # Disable locking for better performance with dask
+    "data_vars": "minimal",
+    "decode_times": True,  # Decode times for proper temporal handling
+    "lock": False,  # Disable locking for better performance with dask
 }
 
 
