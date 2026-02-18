@@ -7,11 +7,39 @@ LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 LOG = logging.getLogger(__name__)
 
+
+def run_local_gpu(args):
+    # GPU mode: NO dask.distributed, NO LocalCluster
+    import dask
+    from .verification.verification import Verification
+    print("Running in GPU mode: using dask threads scheduler (single process, single GPU)...")
+
+    # Force threaded scheduler (single process, no serialization)
+    dask.config.set(scheduler="threads")
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format=LOG_FORMAT,
+        datefmt=DATE_FORMAT,
+        handlers=[logging.StreamHandler()],
+    )
+
+    LOG.info("Running in GPU mode: dask threads scheduler (single process, single GPU)")
+
+    verif = Verification(args.CONFIG)
+    try:
+        verif.verify()
+    except Exception:
+        LOG.error("Error during verification", exc_info=True)
+        sys.exit(1)
+
+
 def run_local(args):
     # Only import the necessary modules if function is called
     # to avoid unnecessary slow imports at the top level
     from dask.distributed import Client, LocalCluster
     from .verification.verification import Verification
+    print(f"Starting local dask cluster with {args.n_workers} workers and {args.threads_per_worker} threads per worker...")
     cluster = LocalCluster(
         n_workers=args.n_workers,
         threads_per_worker=args.threads_per_worker,
@@ -45,6 +73,8 @@ def run_slurm(args):
     from dask.distributed import Client
     from dask_jobqueue import SLURMCluster
     from .verification.verification import Verification
+    print(f"Starting SLURM cluster with {args.jobs} jobs, {args.cores} cores per job, {args.memory} memory per job, "
+          f"and walltime {args.walltime}...")
     
     cluster = SLURMCluster(
         queue = args.queue,
@@ -86,6 +116,12 @@ def main():
 
     local_parser = subparsers.add_parser(
         "local", help="Run the verification pipeline based on a config-file on a local dask cluster"
+    )
+
+    local_parser.add_argument(
+        "--use_gpu",
+        action="store_true",
+        help="Run in GPU mode (CuPy + dask threads scheduler, no distributed)"
     )
 
     local_parser.add_argument(
@@ -177,9 +213,18 @@ def main():
     )
 
     args = parser.parse_args()
+    
+    if args.use_gpu and (args.n_workers != 1 or args.threads_per_worker != 1):
+        LOG.warning(
+            "GPU mode ignores --n_workers and --threads_per_worker "
+            "(threads scheduler, single process)"
+        )
 
     if args.command == "local":
-        run_local(args)
+        if getattr(args, "use_gpu", False):
+            run_local_gpu(args)
+        else:
+            run_local(args)
     elif args.command == "slurm":
         run_slurm(args)
     elif not args.command:
