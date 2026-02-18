@@ -35,7 +35,8 @@ MF_KWARGS = {
     "concat_dim": None,
     "data_vars": "minimal",
     "decode_times": True,  # Decode times for proper temporal handling
-    "lock": False,  # Disable locking for better performance with dask
+    # Note: lock parameter not set - uses xarray's default SerializableLock
+    # which is required for proper synchronization in distributed environments
 }
 
 # Default chunking strategy for lazy loading
@@ -138,7 +139,7 @@ class AnemoiInference(GridDataStore,FcstDataStore):
         Performance optimizations:
         - Uses dask chunking for lazy loading
         - Disables parallel mode to let dask handle parallelization
-        - Uses lock=False for better multi-threaded performance
+        - Uses default SerializableLock for thread-safe file access
         - Assigns coordinates without triggering computation
 
         Returns:
