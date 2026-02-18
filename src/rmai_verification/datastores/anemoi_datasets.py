@@ -123,12 +123,12 @@ class AnemoiDatasets(GridDataStore, ObsDataStore):
         """
         
         if isinstance(self._files,list):
-            dss = [xr.open_zarr(file, consolidated=False, chunks="auto") 
+            dss = [xr.open_zarr(file, consolidated=False, chunks={}) 
                 for file in self._files]
             dss_postproc = [_postprocess(ds) for ds in dss]
             ds_postproc = xr.concat(dss_postproc, dim="valid_time")
         else:
-            ds = xr.open_zarr(self._files,consolidated=False,chunks="auto")
+            ds = xr.open_zarr(self._files,consolidated=False,chunks={})
             ds_postproc = _postprocess(ds)
             
         if variables:
