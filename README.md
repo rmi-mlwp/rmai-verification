@@ -72,7 +72,7 @@ Each datastore needs at least two entries in the config:
 Additionally datastore specific keywords can be provided in the config.  
 
 For `anemoi-inference` datastores, you can optimize data reading performance:
-- `chunks`: Custom chunking strategy (dict) for dask arrays. Default is `{"reference_time": 1, "time": -1, "values": -1}`
+- `chunks`: Custom chunking strategy (dict) for dask arrays. Default is `{"reference_time": 1, "time": -1, "values": -1}`. Note that `time` becomes `lead_time` and `values` becomes `grid_index` after preprocessing.
 - `mf_kwargs`: Additional keyword arguments passed to `xarray.open_mfdataset`
 
 example:
@@ -83,8 +83,8 @@ datastores:
     path: /path/to/my/data/{yyyy}/{mm}/{dd}/forecast_{hh}.nc
     chunks:  # Optional: customize chunking for better performance
       reference_time: 1
-      time: -1
-      values: 10000
+      time: -1  # Will become lead_time dimension
+      values: 10000  # Will become grid_index dimension
   high_resolution_model:
     type: anemoi-datasets
     path: /path/to/datasets/high_resolution.zarr

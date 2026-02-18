@@ -57,7 +57,7 @@ class AnemoiInference(GridDataStore,FcstDataStore):
             files: List[str], 
             variables: Union[List[str],Tuple[str],set] = None,
             mapping: Union[Dict[str,str],str] = None,
-            mf_kwargs: Dict[str, Any] = dict(),
+            mf_kwargs: Optional[Dict[str, Any]] = None,
             chunks: Optional[Dict[str, Union[int, str, Tuple]]] = None,
             # *,
             # zarr_path: Optional[str] = None,
@@ -72,6 +72,10 @@ class AnemoiInference(GridDataStore,FcstDataStore):
         self._stacked: bool = True
 
         # Add the xr.open_mfdataset kwargs
+        # Use mutable default handling to avoid shared state
+        if mf_kwargs is None:
+            mf_kwargs = {}
+        
         self._mf_kwargs = dict()
         for key, value in MF_KWARGS.items():
             self._mf_kwargs[key]=mf_kwargs.get(key,value)
