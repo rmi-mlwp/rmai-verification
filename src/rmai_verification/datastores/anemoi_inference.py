@@ -80,7 +80,8 @@ class AnemoiInference(GridDataStore,FcstDataStore):
                 self._mf_kwargs[key] = value
         
         # Store custom chunks if provided, otherwise use defaults
-        self._chunks = chunks if chunks is not None else DEFAULT_CHUNKS
+        # Use copy() to avoid modifying the global DEFAULT_CHUNKS
+        self._chunks = chunks if chunks is not None else DEFAULT_CHUNKS.copy()
         
     
         # If user passed a zarr_path and wants to use it, open it directly (fast path)
@@ -158,7 +159,7 @@ class AnemoiInference(GridDataStore,FcstDataStore):
                 # Compute valid_time lazily using coordinates instead of .data
                 "valid_time": (
                     ["reference_time", "lead_time"],
-                    ds["reference_time"].values[:,np.newaxis] + \
+                    ds["reference_time"].values[:,np.newaxis] +
                         self._lead_times[np.newaxis,:]
                 ),
                 "longitude" : ("grid_index", self._longitudes),
