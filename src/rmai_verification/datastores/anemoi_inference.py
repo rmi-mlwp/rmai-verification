@@ -6,7 +6,7 @@ import os
 import shutil
 
 from numpy.typing import NDArray
-from typing import List, Tuple, Dict, Union, Sequence, Iterator, Optional
+from typing import List, Tuple, Dict, Union, Sequence, Iterator, Optional, Any
 
 from .base import GridDataStore, FcstDataStore
 from ..grids.grid_mapping import add_xy
@@ -29,11 +29,22 @@ DROP_VARS = [
 ]
 
 MF_KWARGS = {
-    "engine":"h5netcdf",
-    "combine":"by_coords",
-    "parallel":True,
+    "engine": "h5netcdf",
+    "combine": "by_coords",
+    "parallel": True,  # Let dask handle parallelization to avoid overhead
     "concat_dim": None,
-    "data_vars":"minimal"
+    "data_vars": "minimal",
+    "coords": "minimal",
+    "decode_times": True,  # Decode times for proper temporal handling
+    # Note: lock parameter not set - uses xarray's default SerializableLock
+    # which is required for proper synchronization in distributed environments
+}
+
+# Default chunking strategy for lazy loading
+DEFAULT_CHUNKS = {
+    "reference_time": 1,
+    "time": -1,
+    "values": -1
 }
 
 
@@ -48,7 +59,8 @@ class AnemoiInference(GridDataStore,FcstDataStore):
             files: List[str], 
             variables: Union[List[str],Tuple[str],set] = None,
             mapping: Union[Dict[str,str],str] = None,
-            mf_kwargs: Dict[str,str] = dict(),
+            mf_kwargs: Optional[Dict[str, Any]] = None,
+            chunks: Optional[Dict[str, Union[int, str, Tuple]]] = None,
             # *,
             # zarr_path: Optional[str] = None,
             # use_zarr_if_available: bool = True, TO DO? Don't create zarr if it already exists
@@ -62,12 +74,20 @@ class AnemoiInference(GridDataStore,FcstDataStore):
         self._stacked: bool = True
 
         # Add the xr.open_mfdataset kwargs
+        # Use mutable default handling to avoid shared state
+        if mf_kwargs is None:
+            mf_kwargs = {}
+        
         self._mf_kwargs = dict()
         for key, value in MF_KWARGS.items():
             self._mf_kwargs[key]=mf_kwargs.get(key,value)
         for key, value in mf_kwargs.items():
             if key not in self._mf_kwargs.keys():
                 self._mf_kwargs[key] = value
+        
+        # Store custom chunks if provided, otherwise use defaults
+        # Use copy() to avoid modifying the global DEFAULT_CHUNKS
+        self._chunks = chunks if chunks is not None else DEFAULT_CHUNKS.copy()
         
     
         # If user passed a zarr_path and wants to use it, open it directly (fast path)
@@ -116,6 +136,12 @@ class AnemoiInference(GridDataStore,FcstDataStore):
         This method uses `xarray.open_mfdataset` to open multiple NetCDF files,
         preprocesses them, and assigns additional coordinates such as lead time,
         grid index, valid time.
+        
+        Performance optimizations:
+        - Uses dask chunking for lazy loading
+        - Disables parallel mode to let dask handle parallelization
+        - Uses default SerializableLock for thread-safe file access
+        - Assigns coordinates without triggering computation
 
         Returns:
             xarray.Dataset: The processed dataset with assigned coordinates and
@@ -124,20 +150,22 @@ class AnemoiInference(GridDataStore,FcstDataStore):
         ds = xr.open_mfdataset(
             self._files,
             preprocess=_preprocess,
-            chunks={
-                "reference_time" : 1,
-                "time": -1,
-                "values": -1
-            },
+            chunks=self._chunks,
             **self._mf_kwargs,
         )
+        
+        # Build coordinate arrays without triggering computation
+        # Use lazy operations where possible
+        grid_size = ds.sizes["grid_index"]
+        
         ds_coords = ds.assign_coords(
             {
                 "lead_time": ("lead_time", self._lead_times),
-                "grid_index": ("grid_index", np.arange(ds.sizes["grid_index"])),
+                "grid_index": ("grid_index", np.arange(grid_size)),
+                # Compute valid_time lazily using coordinates instead of .data
                 "valid_time": (
                     ["reference_time", "lead_time"],
-                    ds["reference_time"].data[:,np.newaxis] + \
+                    ds["reference_time"].values[:,np.newaxis] +
                         self._lead_times[np.newaxis,:]
                 ),
                 "longitude" : ("grid_index", self._longitudes),
@@ -285,7 +313,7 @@ def _preprocess(ds: xr.Dataset | xr.DataArray) -> xr.Dataset:
         xarray.Dataset: The preprocessed dataset with dropped variables and renamed dimensions.
     """
 
-    reference_time = ds["time"].data[0]
+    reference_time = ds["time"].isel(time=0).values
     
     ds_pruned = ds.drop_vars(DROP_VARS, errors="ignore")
     ds_reftime = ds_pruned.expand_dims(

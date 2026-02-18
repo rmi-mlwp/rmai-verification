@@ -70,12 +70,21 @@ Each datastore needs at least two entries in the config:
 - `path`: the path of the datastore, which can contain date placeholders
   
 Additionally datastore specific keywords can be provided in the config.  
+
+For `anemoi-inference` datastores, you can optimize data reading performance:
+- `chunks`: Custom chunking strategy (dict) for dask arrays. Specify chunks using the **original dimension names** from the NetCDF files (`time`, `values`) before they are renamed to `lead_time` and `grid_index`. Default is `{"reference_time": 1, "time": -1, "values": -1}`.
+- `mf_kwargs`: Additional keyword arguments passed to `xarray.open_mfdataset`. Note: The default file locking mechanism (SerializableLock) is automatically used to prevent race conditions in distributed environments. Do not set `lock=False`.
+
 example:
 ```yaml
 datastores:
   low_resolution_model:
     type: anemoi-inference
     path: /path/to/my/data/{yyyy}/{mm}/{dd}/forecast_{hh}.nc
+    chunks:  # Optional: customize chunking for better performance
+      reference_time: 1
+      time: -1  # Use -1 for automatic chunking along this dimension
+      values: -1  # Adjust based on your grid size and memory constraints
   high_resolution_model:
     type: anemoi-datasets
     path: /path/to/datasets/high_resolution.zarr
