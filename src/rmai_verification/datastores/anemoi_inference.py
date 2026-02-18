@@ -31,9 +31,10 @@ DROP_VARS = [
 MF_KWARGS = {
     "engine": "h5netcdf",
     "combine": "by_coords",
-    "parallel": False,  # Let dask handle parallelization to avoid overhead
+    "parallel": True,  # Let dask handle parallelization to avoid overhead
     "concat_dim": None,
     "data_vars": "minimal",
+    "coords": "minimal",
     "decode_times": True,  # Decode times for proper temporal handling
     # Note: lock parameter not set - uses xarray's default SerializableLock
     # which is required for proper synchronization in distributed environments
@@ -312,7 +313,7 @@ def _preprocess(ds: xr.Dataset | xr.DataArray) -> xr.Dataset:
         xarray.Dataset: The preprocessed dataset with dropped variables and renamed dimensions.
     """
 
-    reference_time = ds["time"].data[0]
+    reference_time = ds["time"].isel(time=0).values
     
     ds_pruned = ds.drop_vars(DROP_VARS, errors="ignore")
     ds_reftime = ds_pruned.expand_dims(
