@@ -13,6 +13,7 @@ from ..output import save_dataset
 from ..visualization import plot_overview
 from ..utils.files import load_yaml
 from ..datastores import select_variables, load_datastores, BaseDataStore
+from ..utils.profiling import get_profiler
 
 LOG = logging.getLogger(__name__)
 
@@ -197,6 +198,9 @@ class Verification():
         It also handles the selection of variables based on the configuration.
         The reference datastore is used as the baseline for spatial alignment.
         """
+        profiler = get_profiler()
+        if profiler:
+            profiler.start_stage("align_datastores")
 
         select_variables(
             datastores=self._datastores,
@@ -220,6 +224,9 @@ class Verification():
             kwargs=align_spatial_kwargs
         )
         
+        if profiler:
+            profiler.end_stage("align_datastores")
+        
     def calculate_clusters(self) -> None:
         """Calculate verification metrics for defined clusters.
         
@@ -227,6 +234,9 @@ class Verification():
         calculates the metrics using the reference datastore, and saves the results.
         It also handles the output configuration for each cluster.
         """
+        profiler = get_profiler()
+        if profiler:
+            profiler.start_stage("calculate_clusters")
 
         use_gpu = bool(self._config.get("verification", {}).get("use_gpu", False))
         print(use_gpu)
@@ -257,6 +267,9 @@ class Verification():
                     **output_config,
                 )
         self._clusters = clusters
+        
+        if profiler:
+            profiler.end_stage("calculate_clusters")
 
     def visualize_clusters(self) -> None:
         """Visualizes the metrics for each cluster using the specified configuration.
@@ -276,6 +289,9 @@ class Verification():
             - Default directory is "./" if not specified
             - Default prefix is the cluster name if not specified
         """
+        profiler = get_profiler()
+        if profiler:
+            profiler.start_stage("visualize_clusters")
 
         if not (self._config.get("visualization",None) == None):
             for cluster, metrics in self._clusters.items():
@@ -292,6 +308,9 @@ class Verification():
                 )
         else:
             LOG.info("No visualization configuration found. Skipping visualization.")
+            
+        if profiler:
+            profiler.end_stage("visualize_clusters")
     
     def verify(self):
         self.align_datastores()

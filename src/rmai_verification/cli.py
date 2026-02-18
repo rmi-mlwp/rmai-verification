@@ -1,6 +1,7 @@
 import argparse
 import sys
 import logging
+import time
 
 # Define log format
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
@@ -12,6 +13,8 @@ def run_local_gpu(args):
     # GPU mode: NO dask.distributed, NO LocalCluster
     import dask
     from .verification.verification import Verification
+    from .utils.profiling import Profiler, set_profiler
+    
     print("Running in GPU mode: using dask threads scheduler (single process, single GPU)...")
 
     # Force threaded scheduler (single process, no serialization)
@@ -26,12 +29,24 @@ def run_local_gpu(args):
 
     LOG.info("Running in GPU mode: dask threads scheduler (single process, single GPU)")
 
+    # Initialize profiler
+    profiler = Profiler(mode="local_gpu")
+    set_profiler(profiler)
+    profiler.start()
+
     verif = Verification(args.CONFIG)
     try:
         verif.verify()
     except Exception:
         LOG.error("Error during verification", exc_info=True)
         sys.exit(1)
+    finally:
+        profiler.end()
+        profiler.print_summary()
+        
+        # Save profiling results if requested
+        if args.profile_output:
+            profiler.save_to_file(args.profile_output)
 
 
 def run_local(args):
@@ -39,15 +54,26 @@ def run_local(args):
     # to avoid unnecessary slow imports at the top level
     from dask.distributed import Client, LocalCluster
     from .verification.verification import Verification
+    from .utils.profiling import Profiler, set_profiler
+    
     print(f"Starting local dask cluster with {args.n_workers} workers and {args.threads_per_worker} threads per worker...")
+    
+    # Initialize profiler
+    profiler = Profiler(mode="local")
+    set_profiler(profiler)
+    profiler.start()
+    
+    # Time cluster startup
+    cluster_start = time.time()
     cluster = LocalCluster(
         n_workers=args.n_workers,
         threads_per_worker=args.threads_per_worker,
         processes=True,
     )
     client = Client(cluster)
+    cluster_startup_time = time.time() - cluster_start
+    profiler.record_cluster_startup(cluster_startup_time)
 
-        
     logging.basicConfig(
         level=logging.INFO,  # Set log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         format=LOG_FORMAT, 
@@ -66,6 +92,16 @@ def run_local(args):
         client.close()
         cluster.close()
         sys.exit(1)
+    finally:
+        profiler.end()
+        profiler.print_summary()
+        
+        # Save profiling results if requested
+        if args.profile_output:
+            profiler.save_to_file(args.profile_output)
+        
+        client.close()
+        cluster.close()
 
 def run_slurm(args):
     # Only import the necessary modules if function is called
@@ -73,9 +109,18 @@ def run_slurm(args):
     from dask.distributed import Client
     from dask_jobqueue import SLURMCluster
     from .verification.verification import Verification
+    from .utils.profiling import Profiler, set_profiler, wait_for_workers
+    
     print(f"Starting SLURM cluster with {args.jobs} jobs, {args.cores} cores per job, {args.memory} memory per job, "
           f"and walltime {args.walltime}...")
     
+    # Initialize profiler
+    profiler = Profiler(mode="slurm")
+    set_profiler(profiler)
+    profiler.start()
+    
+    # Time cluster startup
+    cluster_start = time.time()
     cluster = SLURMCluster(
         queue = args.queue,
         account = args.account,
@@ -88,6 +133,13 @@ def run_slurm(args):
     )
     cluster.scale(jobs=args.jobs)
     client = Client(cluster)
+    cluster_startup_time = time.time() - cluster_start
+    profiler.record_cluster_startup(cluster_startup_time)
+
+    # Wait for workers and measure queuing time
+    expected_workers = args.jobs * args.processes
+    queuing_time = wait_for_workers(client, expected_workers, timeout=args.worker_timeout)
+    profiler.record_slurm_queuing(queuing_time)
 
     logging.basicConfig(
         level=logging.INFO,  # Set log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
@@ -98,6 +150,25 @@ def run_slurm(args):
             logging.StreamHandler()          # Log to console
         ]
     )
+
+    verif = Verification(args.CONFIG)
+    try:
+        verif.verify()
+    except:
+        LOG.error("Error during verfication closing down dask cluster",exc_info=True)
+        client.close()
+        cluster.close()
+        sys.exit(1)
+    finally:
+        profiler.end()
+        profiler.print_summary()
+        
+        # Save profiling results if requested
+        if args.profile_output:
+            profiler.save_to_file(args.profile_output)
+        
+        client.close()
+        cluster.close()
 
     verif = Verification(args.CONFIG)
     try:
@@ -136,6 +207,13 @@ def main():
         default=1,
         type=int,
         help="Number of threads per dask worker"
+    )
+    
+    local_parser.add_argument(
+        "--profile_output",
+        type=str,
+        default=None,
+        help="Path to save profiling results as JSON (optional)"
     )
 
     slurm_parser = subparsers.add_parser(
@@ -204,6 +282,20 @@ def main():
         help="Extra SBATCH directives. Can be used multiple times, e.g. "
             "--job-extra-directive='--output=/path/%j.out' "
             "--job-extra-directive='--error=/path/%j.err'"
+    )
+    
+    slurm_parser.add_argument(
+        "--worker_timeout",
+        type=int,
+        default=300,
+        help="Maximum time in seconds to wait for SLURM workers to become available"
+    )
+    
+    slurm_parser.add_argument(
+        "--profile_output",
+        type=str,
+        default=None,
+        help="Path to save profiling results as JSON (optional)"
     )
 
     parser.add_argument(
