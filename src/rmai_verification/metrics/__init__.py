@@ -93,6 +93,9 @@ def calculate_metrics(reference : xr.Dataset,
             # This prevents OOM errors when working with large datasets
             result_lazy = metric(reference_aligned, model_aligned, avg_dims)
             
+            # Free aligned datasets early to reduce memory pressure
+            del reference_aligned, model_aligned
+            
             # Handle both Dataset and DataArray return types
             if isinstance(result_lazy, xr.DataArray):
                 # For DataArray, just compute directly
@@ -111,6 +114,8 @@ def calculate_metrics(reference : xr.Dataset,
                 # Reconstruct the dataset with computed variables
                 _metric[name] = xr.Dataset(computed_vars, attrs=result_lazy.attrs)
             
+            # Free the lazy result to avoid holding references
+            del result_lazy
             # Clear GPU memory after each model
             clear_gpu_memory()
         metrics_dict[metric_name] = concat_dict_along_keys(_metric, "model")
