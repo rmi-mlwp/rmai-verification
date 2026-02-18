@@ -18,6 +18,103 @@ LOG = logging.getLogger(__name__)
 
 VERIF_VARS = ["2t", "10s"]
 
+def maybe_to_cupy(obj, use_gpu: bool):
+    if not use_gpu:
+        return obj
+
+    try:
+        import cupy as cp
+    except ImportError:
+        LOG.warning("use_gpu=True but CuPy is not installed; falling back to CPU/NumPy.")
+        return obj
+
+    import numpy as np
+    import xarray as xr
+
+    def _convert_da(da: xr.DataArray) -> xr.DataArray:
+        # Only move numeric arrays (avoid datetime/timedelta/object which CuPy may not support)
+        if da.dtype.kind not in ("b", "i", "u", "f", "c"):
+            return da
+
+        data = da.data  # can be numpy or dask array
+        if hasattr(data, "map_blocks"):
+            # dask array -> dask array with cupy chunks
+            new_data = data.map_blocks(cp.asarray, dtype=da.dtype)
+        else:
+            # eager numpy -> eager cupy
+            new_data = cp.asarray(np.asarray(data))
+        return da.copy(data=new_data)
+
+    if isinstance(obj, xr.DataArray):
+        return _convert_da(obj)
+
+    if isinstance(obj, xr.Dataset):
+        # Apply to each data_var (coords are left alone)
+        return obj.map(_convert_da)
+
+    # If it's something else (e.g. plain dask array), do a best-effort conversion
+    if hasattr(obj, "map_blocks"):
+        return obj.map_blocks(cp.asarray)
+    return cp.asarray(obj)
+
+
+def maybe_to_numpy(obj, use_gpu: bool):
+    """
+    If use_gpu=True, convert CuPy-backed data (eager or dask chunks) back to NumPy.
+    If use_gpu=False, return obj unchanged.
+
+    Supports: xarray.DataArray, xarray.Dataset, and falls back for dask arrays / cupy arrays.
+    """
+    if not use_gpu:
+        return obj
+
+    try:
+        import cupy as cp
+    except ImportError:
+        # If CuPy isn't available, we can't have CuPy-backed arrays anyway.
+        return obj
+
+    import xarray as xr
+
+    def _to_numpy_da(xda: xr.DataArray) -> xr.DataArray:
+        data = xda.data
+
+        # Eager CuPy -> eager NumPy
+        if isinstance(data, cp.ndarray):
+            return xda.copy(data=cp.asnumpy(data))  # or data.get()
+
+        # Dask array (possibly with CuPy chunks)
+        if hasattr(data, "map_blocks"):
+            # Robust check: look at meta if available, otherwise try a tiny conversion
+            meta = getattr(data, "_meta", None)
+            if isinstance(meta, cp.ndarray):
+                new = data.map_blocks(cp.asnumpy, dtype=xda.dtype)
+                return xda.copy(data=new)
+
+        return xda
+
+    # xarray wrappers
+    if isinstance(obj, xr.DataArray):
+        return _to_numpy_da(obj)
+
+    if isinstance(obj, xr.Dataset):
+        # Only data variables are mapped; coords preserved
+        return obj.map(_to_numpy_da)
+
+    # Non-xarray fallbacks
+    if isinstance(obj, cp.ndarray):
+        return cp.asnumpy(obj)
+
+    if hasattr(obj, "map_blocks"):
+        # dask array: if meta is cupy, map back; else leave as-is
+        meta = getattr(obj, "_meta", None)
+        if isinstance(meta, cp.ndarray):
+            return obj.map_blocks(cp.asnumpy, dtype=obj.dtype)
+        return obj
+
+    return obj
+
+
 class Verification():
     """A class for handling data verification and visualization workflows.
     This class manages the entire verification process including data alignment,
@@ -131,16 +228,24 @@ class Verification():
         It also handles the output configuration for each cluster.
         """
 
+        use_gpu = bool(self._config.get("verification", {}).get("use_gpu", False))
+        print(use_gpu)
+
         reference = self._aligned_data.pop(self._reference_datastore)
         broadcast_nans(list(self._aligned_data.values()))
+
+        reference_x = maybe_to_cupy(reference, use_gpu)
+        data_x = {k: maybe_to_cupy(v, use_gpu) for k, v in self._aligned_data.items()}
         
         clusters = dict()
         for cluster, config in self._config["verification"]["clusters"].items():
-            clusters[cluster] = calculate_metrics(
-                reference=reference,
-                dict_of_datasets=self._aligned_data,
+            metrics = calculate_metrics(
+                reference=reference_x,
+                dict_of_datasets=data_x,
                 **config
             )
+            metrics = maybe_to_numpy(metrics, use_gpu)
+            clusters[cluster] = metrics
             output_config = prep_config(self._config["output"], cluster)
             output_type = output_config.pop("type",None)
             if output_type:
