@@ -305,14 +305,13 @@ def main():
     )
 
     args = parser.parse_args()
-    
-    if args.use_gpu and (args.n_workers != 1 or args.threads_per_worker != 1):
-        LOG.warning(
-            "GPU mode ignores --n_workers and --threads_per_worker "
-            "(threads scheduler, single process)"
-        )
 
     if args.command == "local":
+        if args.use_gpu and (args.n_workers != 1 or args.threads_per_worker != 1):
+            LOG.warning(
+                "GPU mode ignores --n_workers and --threads_per_worker "
+                "(threads scheduler, single process)"
+            )
         if getattr(args, "use_gpu", False):
             run_local_gpu(args)
         else:
