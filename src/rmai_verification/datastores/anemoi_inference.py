@@ -155,7 +155,7 @@ class AnemoiInference(GridDataStore,FcstDataStore):
                 # Compute valid_time lazily using coordinates instead of .data
                 "valid_time": (
                     ["reference_time", "lead_time"],
-                    ds["reference_time"][:,np.newaxis] + \
+                    ds["reference_time"].values[:,np.newaxis] + \
                         self._lead_times[np.newaxis,:]
                 ),
                 "longitude" : ("grid_index", self._longitudes),
