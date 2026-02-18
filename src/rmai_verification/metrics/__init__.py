@@ -1,9 +1,30 @@
 import xarray as xr
 import logging
+import gc
 
 from . import xskill, scrs
 from typing import List, Dict
 from ..utils.sanitation import concat_dict_along_keys
+
+LOG = logging.getLogger(__name__)
+
+def clear_gpu_memory():
+    """Clear GPU memory if CuPy is being used.
+    
+    This function attempts to free all GPU memory blocks to prevent
+    out-of-memory errors during long computations. It safely handles
+    cases where CuPy is not installed or GPU is not available.
+    """
+    try:
+        import cupy as cp
+        # Free all GPU memory blocks
+        cp.get_default_memory_pool().free_all_blocks()
+        # Also run garbage collection
+        gc.collect()
+        LOG.debug("GPU memory cleared")
+    except (ImportError, RuntimeError):
+        # CuPy not available or GPU not accessible, just run CPU GC
+        gc.collect()
 
 METRICS = {
     "xskillscore" : {
@@ -17,8 +38,6 @@ METRICS = {
         "bias": scrs.bias,
     },
 }
-
-LOG = logging.getLogger(__name__)
 
 def calculate_metrics(reference : xr.Dataset,
                     
@@ -68,7 +87,11 @@ def calculate_metrics(reference : xr.Dataset,
         metric = METRICS[package][metric_name]
         for name, model in dict_of_datasets.items():
             LOG.info(f"Calulating {metric_name} for model {name}")
-            reference, model = xr.align(reference,model)
-            _metric[name]=metric(reference, model, avg_dims).compute()
+            reference_aligned, model_aligned = xr.align(reference, model)
+            _metric[name]=metric(reference_aligned, model_aligned, avg_dims).compute()
+            # Clear GPU memory after each metric computation to prevent OOM
+            clear_gpu_memory()
         metrics_dict[metric_name] = concat_dict_along_keys(_metric, "model")
+        # Clear GPU memory after concatenating metrics for a metric type
+        clear_gpu_memory()
     return concat_dict_along_keys(metrics_dict, "metric")

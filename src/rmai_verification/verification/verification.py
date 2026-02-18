@@ -8,7 +8,7 @@ from typing import Dict, List, Union
 from ..alignment import align_reference_times, align_spatial, align_valid_times
 from ..transformations import apply_transformations
 from ..utils.sanitation import broadcast_nans, prep_config
-from ..metrics import calculate_metrics
+from ..metrics import calculate_metrics, clear_gpu_memory
 from ..output import save_dataset
 from ..visualization import plot_overview
 from ..utils.files import load_yaml
@@ -271,6 +271,9 @@ class Verification():
                 **config
             )
             metrics = maybe_to_numpy(metrics, use_gpu)
+            # Clear GPU memory after processing each cluster
+            if use_gpu:
+                clear_gpu_memory()
             clusters[cluster] = metrics
             output_config = prep_config(self._config["output"], cluster)
             output_type = output_config.pop("type",None)
