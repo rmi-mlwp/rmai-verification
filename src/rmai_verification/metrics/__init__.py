@@ -86,7 +86,7 @@ def calculate_metrics(reference : xr.Dataset,
         _metric = dict()
         metric = METRICS[package][metric_name]
         for name, model in dict_of_datasets.items():
-            LOG.info(f"Calulating {metric_name} for model {name}")
+            LOG.info(f"Calculating {metric_name} for model {name}")
             reference_aligned, model_aligned = xr.align(reference, model)
             
             # Compute metrics variable-by-variable to reduce memory usage
@@ -105,9 +105,12 @@ def calculate_metrics(reference : xr.Dataset,
             else:
                 # For Dataset, process each data variable separately
                 computed_vars = {}
-                for var_name in result_lazy.data_vars:
+                # Get all variable references first to avoid repeated graph traversals
+                var_names = list(result_lazy.data_vars)
+                for var_name in var_names:
                     LOG.debug(f"Computing {metric_name} for variable {var_name} in model {name}")
-                    computed_vars[var_name] = result_lazy[var_name].compute()
+                    var_data = result_lazy[var_name]
+                    computed_vars[var_name] = var_data.compute()
                     # Clear GPU memory after each variable computation
                     clear_gpu_memory()
                 
