@@ -255,7 +255,7 @@ class Verification():
             profiler.start_stage("calculate_clusters")
 
         use_gpu = bool(self._config.get("verification", {}).get("use_gpu", False))
-        print(use_gpu)
+        LOG.info(f"Using GPU for metric calculations: {use_gpu}")
 
         reference = self._aligned_data.pop(self._reference_datastore)
         broadcast_nans(list(self._aligned_data.values()))
@@ -264,10 +264,12 @@ class Verification():
         data_x = {k: maybe_to_cupy(v, use_gpu) for k, v in self._aligned_data.items()}
         
         clusters = dict()
+        large_memory = bool(self._config.get("verification", {}).get("large_memory", False))
         for cluster, config in self._config["verification"]["clusters"].items():
             metrics = calculate_metrics(
                 reference=reference_x,
                 dict_of_datasets=data_x,
+                large_memory=large_memory,
                 **config
             )
             metrics = maybe_to_numpy(metrics, use_gpu)
