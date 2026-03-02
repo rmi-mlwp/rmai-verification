@@ -3,11 +3,13 @@ import logging
 import xarray as xr
 import os
 from typing import Dict, List, Union
+import numpy as np
 
 
 from ..alignment import align_reference_times, align_spatial, align_valid_times
 from ..transformations import apply_transformations
 from ..utils.sanitation import broadcast_nans, prep_config
+from ..utils.time import to_timedelta64, datetime_batches
 from ..metrics import calculate_metrics, clear_gpu_memory
 from ..output import save_dataset
 from ..visualization import plot_overview
@@ -303,42 +305,57 @@ class Verification():
     
     def verify(self):
         config = self._config
-        self._start = config["dates"]["start"]
-        self._end = config["dates"]["end"]
+
+        # Introduce batch size.
+        # First convert start, end and frequency to numpy datetime64 and timedelta64 for easier manipulation
+        start = config["dates"]["start"]
+        end = config["dates"]["end"]
+        frequency = config["dates"]["frequency"]
+        batch_size = config["dates"].get("batch_size", -1)
+        batches = datetime_batches(start, end, frequency, batch_size)
+        LOG.info("Batches: %s", batches)
+
         self._frequency = config["dates"]["frequency"]
         self._output_type = config["output"].get("type",None)
-        
-        # Profile datastore loading
+
         profiler = get_profiler()
-        if profiler:
-            profiler.start_stage("load_datastores")
-        
-        self._datastores = load_datastores(
-            datastores=self._config["datastores"],
-            start_date=self._start,
-            end_date=self._end,
-            frequency=self._frequency
-        )
-        self._reference_datastore = config["verification"]["reference_datastore"]
-        
-        if profiler:
-            profiler.end_stage("load_datastores")
-        
-        # Profile transformations
-        if profiler:
-            profiler.start_stage("apply_transformations")
 
-        apply_transformations(
-            datastores=self._datastores, 
-            transformations=self._config["transformations"]
-        )
-        
-        if profiler:
-            profiler.end_stage("apply_transformations")
+        for batch in batches:
+            LOG.info("Processing batch: %s", batch)
 
-        self.align_datastores()
-        self.calculate_clusters()
-        self.visualize_clusters()
+            self._start = batch[0] # config["dates"]["start"]
+            self._end = batch[1]# config["dates"]["end"]
+        
+            # Profile datastore loading
+            if profiler:
+                profiler.start_stage("load_datastores")
+            
+            self._datastores = load_datastores(
+                datastores=self._config["datastores"],
+                start_date=self._start,
+                end_date=self._end,
+                frequency=self._frequency
+            )
+            self._reference_datastore = config["verification"]["reference_datastore"]
+            
+            if profiler:
+                profiler.end_stage("load_datastores")
+            
+            # Profile transformations
+            if profiler:
+                profiler.start_stage("apply_transformations")
+
+            apply_transformations(
+                datastores=self._datastores, 
+                transformations=self._config["transformations"]
+            )
+            
+            if profiler:
+                profiler.end_stage("apply_transformations")
+
+            self.align_datastores()
+            self.calculate_clusters()
+            self.visualize_clusters()
         
 
 

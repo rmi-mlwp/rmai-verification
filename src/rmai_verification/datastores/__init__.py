@@ -44,16 +44,23 @@ def load_datastores(datastores : Dict[str, Dict], start_date : str, end_date : s
     frequency = to_timedelta64(frequency)
 
     for name, config in datastores.items():
+        path = config["path"]
+        store_type = config["type"]
+
         files = get_filenames(
-            path_fmt=config.pop("path"),
+            path_fmt=path,
             start=start_date,
             end=end_date,
             frequency=frequency,
         )
         LOG.debug("Loading files %s", ", ".join(files))
-        store = DATASTORES[config.pop("type")]
 
-        stores[name] = store(files=files,**config)
+        store_cls = DATASTORES[store_type]
+
+        stores[name] = store_cls(
+            files=files,
+            **{k: v for k, v in config.items() if k not in ("path", "type")}
+        )
 
     return stores
 
