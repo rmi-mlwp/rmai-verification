@@ -320,13 +320,12 @@ class Verification():
 
         profiler = get_profiler()
 
-        for batch in batches:
+        for i, batch in enumerate(batches):
+            profiler.start_batch(label=f"batch {i:03d}")
             LOG.info("Processing batch: %s", batch)
 
-            self._start = batch[0] # config["dates"]["start"]
-            self._end = batch[1]# config["dates"]["end"]
-        
-            # Profile datastore loading
+            self._start, self._end = batch[0], batch[1]
+
             if profiler:
                 profiler.start_stage("load_datastores")
             
@@ -356,12 +355,5 @@ class Verification():
             self.align_datastores()
             self.calculate_clusters()
             self.visualize_clusters()
-        
 
-
-
-
-
-    
-        
-        
+            profiler.end_batch()
