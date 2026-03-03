@@ -42,7 +42,7 @@ MF_KWARGS = {
 
 # Default chunking strategy for lazy loading
 DEFAULT_CHUNKS = {
-    "reference_time": 1,
+    "reference_time": 1, # Change this? It does not seem to have an effect...
     "time": -1,
     "values": -1
 }
@@ -153,6 +153,8 @@ class AnemoiInference(GridDataStore,FcstDataStore):
             chunks=self._chunks,
             **self._mf_kwargs,
         )
+
+        LOG.info("dimensions of ds: %s", ds.dims)
         
         # Build coordinate arrays without triggering computation
         # Use lazy operations where possible
