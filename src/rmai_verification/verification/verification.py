@@ -235,6 +235,10 @@ class Verification():
         
         clusters = dict()
         large_memory = bool(self._config.get("verification", {}).get("large_memory", False))
+
+        # Batch info (set by your outer batch loop)
+        batch_idx = getattr(self, "_batch_idx", None)
+
         for cluster, config in self._config["verification"]["clusters"].items():
             metrics = calculate_metrics(
                 reference=reference_x,
@@ -246,17 +250,43 @@ class Verification():
             # Clear GPU memory after processing each cluster
             if use_gpu:
                 clear_gpu_memory()
+
+            # Set attributes for the metrics dataset
+            metrics.attrs = {}
+
             clusters[cluster] = metrics
             output_config = prep_config(self._config["output"], cluster)
             output_type = output_config.pop("type",None)
+
+            LOG.info("Attributes of metrics for cluster %s: %s", cluster, clusters[cluster].attrs)
+
             if output_type:
                 output_path = output_config.pop("path", f"{cluster}.{output_type}")
-                save_dataset(
-                    dataset=clusters[cluster],
-                    type=output_type,
-                    path=output_path,
-                    **output_config,
-                )
+
+                # --- minimal batching hook for zarr ---
+                if output_type == "zarr" and batch_idx is not None:
+                    ds = clusters[cluster]
+                    if "reference_time" not in ds.dims:
+                        raise ValueError("Batching with zarr output requires a 'reference_time' dimension in the metrics dataset.")
+
+                    mode = "w" if batch_idx == 0 else "a"
+
+                    save_dataset(
+                        dataset=ds,
+                        type=output_type,
+                        path=output_path,
+                        append_dim="reference_time",
+                        mode=mode,
+                        **output_config,
+                    )
+                else:
+                    # original behavior
+                    save_dataset(
+                        dataset=clusters[cluster],
+                        type=output_type,
+                        path=output_path,
+                        **output_config,
+                    )
         self._clusters = clusters
         
         if profiler:
@@ -321,9 +351,11 @@ class Verification():
         profiler = get_profiler()
 
         for i, batch in enumerate(batches):
-            profiler.start_batch(label=f"batch {i:03d}")
+            batch_label = f"batch_{i:03d}"
+            profiler.start_batch(label=batch_label)
             LOG.info("Processing batch: %s", batch)
 
+            self._batch_idx = i
             self._start, self._end = batch[0], batch[1]
 
             if profiler:
@@ -354,6 +386,6 @@ class Verification():
 
             self.align_datastores()
             self.calculate_clusters()
-            self.visualize_clusters()
+            # self.visualize_clusters()
 
             profiler.end_batch()
