@@ -155,6 +155,10 @@ class AnemoiInference(GridDataStore,FcstDataStore):
         )
 
         LOG.info("dimensions of ds: %s", ds.dims)
+        for v in ds.data_vars:
+            da = ds[v]
+            chunk_sizes = {d: len(da.chunks[i]) for i, d in enumerate(da.dims)}
+            LOG.info("chunk sizes for variable %s: %s", v, chunk_sizes)
         
         # Build coordinate arrays without triggering computation
         # Use lazy operations where possible
