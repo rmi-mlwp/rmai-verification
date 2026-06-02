@@ -109,8 +109,8 @@ def create_multiindex(ds: xr.Dataset | xr.DataArray, x : str = "x", y : str = "y
     else:
         thinning_factor = 1
 
-    x_values = np.linspace(x_ll,x_ur,nx,endpoint=False)[::thinning_factor]
-    y_values = np.linspace(y_ll,y_ur,ny,endpoint=False)[::thinning_factor]
+    x_values = np.linspace(x_ll,x_ur,nx,endpoint=True)[::thinning_factor]
+    y_values = np.linspace(y_ll,y_ur,ny,endpoint=True)[::thinning_factor]
     
     # Create the multiindex
     mindex = pd.MultiIndex.from_product(

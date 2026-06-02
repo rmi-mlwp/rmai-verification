@@ -30,7 +30,7 @@ GRIDS = dict(
         semiminor_axis=6371229.0,
       ),
       central_longitude=3.7,
-      central_latitude=51.07,
+      central_latitude=0.0,
       standard_parallels=[51.07, 51.07],
     ),
     grid_kws=dict(
