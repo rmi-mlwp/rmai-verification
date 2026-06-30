@@ -389,3 +389,5 @@ class Verification():
             # self.visualize_clusters()
 
             profiler.end_batch()
+
+            LOG.info("Finished batch: %s\n\n", batch)

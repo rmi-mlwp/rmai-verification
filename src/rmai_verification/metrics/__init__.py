@@ -2,8 +2,10 @@ import xarray as xr
 import logging
 import gc
 
-from . import xskill, scrs
-from typing import List, Dict, Optional
+from typing import Dict, Optional
+
+from . import comparative
+from . import diagnostic
 from ..utils.sanitation import concat_dict_along_keys
 
 LOG = logging.getLogger(__name__)
@@ -132,128 +134,193 @@ def clear_gpu_memory():
         gc.collect()
 
 METRICS = {
-    "xskillscore" : {
-        "rmse": xskill.rmse,
-        "mse": xskill.mse,
-        "bias": xskill.bias,
+    "comparative" : {
+        "rmse": comparative.rmse,
+        "mse": comparative.mse,
+        "bias": comparative.bias,
+        "crps": comparative.crps,
+        "skill": comparative.skill,
+        "ssr": comparative.SSR
     },
-    "scores" : {
-        "rmse": scrs.rmse,
-        "mse": scrs.mse,
-        "bias": scrs.bias,
-    },
+    "diagnostic" : {       
+        "frequency_spectrum": diagnostic.spatial_frequency_spectrum,
+        "checkerboard": diagnostic.checkerboard,
+        "spread": diagnostic.spread
+    }
 }
-
-def calculate_metrics(reference : xr.Dataset,
-                    
-                      dict_of_datasets: Dict[str, xr.Dataset], 
-                      package : str, 
-                      metrics : List[str], 
-                      avg_dims : str | List[str],
-                      large_memory: bool = False
-                      ) -> xr.Dataset:
-    """Calculate specified metrics between a reference dataset and multiple model datasets.
-
-        This function computes selected verification metrics comparing a reference dataset
-        against multiple model datasets. The metrics are calculated along specified dimensions
-        and concatenated into a single dataset.
+def calculate_metrics(reference: xr.Dataset, dict_of_datasets: Dict[str, xr.Dataset], comparative: Dict[str, Dict], diagnostic: Dict[str, Dict], large_memory: bool = False) -> xr.Dataset:
+    """
+    Calculate specified metrics between a reference dataset and multiple model datasets.
+ 
+    This function computes selected verification metrics comparing a reference dataset
+    against multiple model datasets. Metrics are organized by type (comparative vs diagnostic).
+    All metrics are combined into a single Dataset for easy saving to zarr.
+    
+    Parameters
+    ----------
+    reference : xr.Dataset
+        The reference/observation dataset to compare against
+    dict_of_datasets : Dict[str, xr.Dataset]
+        Dictionary containing the model datasets to evaluate, with model names as keys
+    comparative : Dict[str, Dict]
+        Configuration for the comparative metrics
+    diagnostic : Dict[str, Dict]
+        Configuratio for the diagnostic metrics
+    large_memory : bool, optional
+        If True, compute metrics variable-by-variable to reduce memory usage. Default is False.
         
-        Parameters
-        ----------
-        reference : xr.Dataset
-            The reference/observation dataset to compare against
-        dict_of_datasets : Dict[str, xr.Dataset]
-            Dictionary containing the model datasets to evaluate, with model names as keys
-        package : str
-            Name of the metrics package to use (must be defined in METRICS)
-        metrics : List[str] 
-            List of metric names to calculate
-        avg_dims : str | List[str]
-            Dimension(s) over which to average the metrics
+    Returns
+    -------
+    xr.Dataset
+        Combined Dataset containing all computed metrics as data variables.
+        All metrics are merged into a single Dataset with variable names following the pattern:
+        {metric_name}_{variable_name}
         
-        Returns
-        -------
-        xr.Dataset
-            Dataset containing all calculated metrics, with dimensions 'model' and 'metric'
-            concatenating results across models and metric types
-        
-        Notes
-        -----
-        - Input datasets are aligned before metric calculation
-        - Metrics are computed variable-by-variable to reduce memory usage
-        - Results are concatenated first across models, then across metrics
+    Notes
+    -----
+    - For comparative metrics, both reference and model are aligned
+    - For diagnostic metrics, only the model is used
     """
     
-    LOG.debug(dict_of_datasets.keys())
-    metrics_dict = dict()
-    #chunks = {dim: -1 for dim in avg_dims}
-    #print(reference.chunk(chunks))
+    # Debug and log information
+    LOG.debug("Available model names: %s", list(dict_of_datasets.keys()))
     LOG.info("Chunks for reference dataset: %s", reference.chunks)
-    LOG.info(
-        "Chunks for model datasets: %s",
-        {name: model.chunks for name, model in dict_of_datasets.items()},
-    )
-    LOG.info("Type of reference dataset: %s", type(reference))
-    LOG.info(
-        "Type of model datasets: %s",
-        {name: str(type(model)) for name, model in dict_of_datasets.items()},
-    )
-    LOG.info(f"Calculating metrics: {metrics} using package: {package} with avg_dims: {avg_dims}")
-    LOG.info(f"Large memory mode: {large_memory}")
+    LOG.info("Chunks for model datasets: %s", {name: model.chunks for name, model in dict_of_datasets.items()})
+    
+    # Initialize all metrics dictionary
+    all_metrics = {}
+ 
+    # Process comparative metrics if available
+    if comparative:
+        LOG.info("=== Processing comparative metrics ===")
+        
+        # Extract package and metrics
+        metrics_list = comparative.get("metrics", [])
 
-    LOG.info("=== Chunk diagnostics BEFORE metrics ===")
-    log_xarray_chunks(reference, "reference", max_vars=20)
-    for model_name, model in dict_of_datasets.items():
-        log_xarray_chunks(model, f"model={model_name}", max_vars=20)
+        # Loop over each metric in the metric list
+        for metric_config in metrics_list:
+            # Extract metric parameters
+            metric_name = metric_config["name"]
+            metric_params = {k: v for k, v in metric_config.items() if k != "name"}
 
-    for metric_name in metrics:
-        _metric = dict()
-        metric = METRICS[package][metric_name]
-        for name, model in dict_of_datasets.items():
-            LOG.info(f"Calculating {metric_name} for model {name}")
-            reference_aligned, model_aligned = xr.align(reference, model)
-            # copy=False
-            LOG.info("=== Chunk diagnostics AFTER xr.align for model=%s ===", name)
-            log_xarray_chunks(reference_aligned, f"reference_aligned({name})", max_vars=20)
-            log_xarray_chunks(model_aligned, f"model_aligned({name})", max_vars=20)
-            
-            if large_memory:
-                # Compute metrics variable-by-variable to reduce memory usage
-                # This prevents OOM errors when working with large datasets
-                result_lazy = metric(reference_aligned, model_aligned, avg_dims)
+            LOG.info("Calculating metric: %s", metric_name)
+
+            # Get the metric function from the registry
+            metric_func = METRICS["comparative"][metric_name]
+
+            # Store results for each model
+            metric_results = {}
+
+            # Calculate metric for each model
+            for model_name, model in dict_of_datasets.items():
+                LOG.info("Calculating %s for model %s", metric_name, model_name)
                 
-                # Free aligned datasets early to reduce memory pressure
+                # For comparative metrics, use both model and reference data
+                LOG.info("Using model data and reference data for comparative metric")
+
+                # Align both datasets for comparative metrics
+                reference_aligned, model_aligned = xr.align(reference, model)
+
+                # Calculate metric with both reference and model + any extra parameters
+                result_lazy = metric_func(reference_aligned, model_aligned, **metric_params)
+
+                # Clean up aligned datasets
                 del reference_aligned, model_aligned
-                
-                # Handle both Dataset and DataArray return types
-                if isinstance(result_lazy, xr.DataArray):
-                    # For DataArray, just compute directly
-                    LOG.info(f"Computing {metric_name} for DataArray in model {name}")
-                    _metric[name] = result_lazy.compute()
-                    clear_gpu_memory()
+
+                # Result is only loaded lazily, compute the active result based on the large_memory flag
+                if large_memory:
+                    # Compute per variable (if variables available)
+                    if isinstance(result_lazy, xr.DataArray):
+                        LOG.info("Computing %s for DataArray in model %s", metric_name, model_name)
+                        metric_results[model_name] = result_lazy.compute()
+                    else:
+                        LOG.info("Computing %s for Dataset in model %s (variable-by-variable)", metric_name, model_name)
+                        computed_vars = {}
+                        var_names = list(result_lazy.data_vars)
+
+                        for var_name in var_names:
+                            LOG.info("  - Computing variable %s", var_name)
+                            computed_vars[var_name] = result_lazy[var_name].compute()
+                            clear_gpu_memory()
+
+                        # Reconstruct dataset with computed variables
+                        metric_results[model_name] = xr.Dataset(computed_vars, attrs=result_lazy.attrs)
                 else:
-                    # For Dataset, process each data variable separately
-                    computed_vars = {}
-                    # Get all variable references first to avoid repeated graph traversals
-                    var_names = list(result_lazy.data_vars)
-                    for var_name in var_names:
-                        LOG.info(f"Computing {metric_name} for variable {var_name} in model {name}")
-                        var_data = result_lazy[var_name]
-                        computed_vars[var_name] = var_data.compute()
-                        # Clear GPU memory after each variable computation
-                        clear_gpu_memory()
-                    
-                    # Reconstruct the dataset with computed variables
-                    _metric[name] = xr.Dataset(computed_vars, attrs=result_lazy.attrs)
-                
-                # Free the lazy result to avoid holding references
-                del result_lazy
-            else:
-                _metric[name]=metric(reference_aligned, model_aligned, avg_dims).compute()
-            
-            # Clear GPU memory after each metric computation to prevent OOM
+                    # No seperate computation needed
+                    metric_results[model_name] = result_lazy.compute()
+                clear_gpu_memory()
+
+            # Concatenate results across models for this metric
+            all_metrics[metric_name] = concat_dict_along_keys(metric_results, "model")
             clear_gpu_memory()
-        metrics_dict[metric_name] = concat_dict_along_keys(_metric, "model")
-        # Clear GPU memory after concatenating metrics for a metric type
-        clear_gpu_memory()
-    return concat_dict_along_keys(metrics_dict, "metric")
+
+
+    # Process diagnostic metrics if available
+    if diagnostic:
+        LOG.info("=== Processing diagnostic metrics ===")
+        
+        # Extract metrics
+        metrics_list = diagnostic.get("metrics", [])
+
+        # Loop over each metric in the metric list
+        for metric_config in metrics_list:
+            # Extract metric parameters
+            metric_name = metric_config["name"]
+            metric_params = {k: v for k, v in metric_config.items() if k != "name"}
+
+            LOG.info("Calculating metric: %s (type: diagnostic)", metric_name)
+
+            # Get the metric function from the registry
+            metric_func = METRICS["diagnostic"][metric_name]
+
+            # Store results for each model
+            metric_results = {}
+
+            # Calculate metric for each model
+            for model_name, model in dict_of_datasets.items():
+                LOG.info("Calculating %s for model %s", metric_name, model_name)
+
+                # For diagnostic metrics, only use the model data
+                LOG.info("Using model data directly for diagnostic metric")
+
+                # Calculate metric with only model + any extra parameters
+                result_lazy = metric_func(model, **metric_params)
+                
+                # Result is only loaded lazily, compute the active result based on the large_memory flag
+                if large_memory:
+                    # Compute per variable (if variables available)
+                    if isinstance(result_lazy, xr.DataArray):
+                        LOG.info("Computing %s for DataArray in model %s", metric_name, model_name)
+                        metric_results[model_name] = result_lazy.compute()
+                    else:
+                        LOG.info("Computing %s for Dataset in model %s (variable-by-variable)", metric_name, model_name)
+                        computed_vars = {}
+                        var_names = list(result_lazy.data_vars)
+
+                        for var_name in var_names:
+                            LOG.info("  - Computing variable %s", var_name)
+                            computed_vars[var_name] = result_lazy[var_name].compute()
+                            clear_gpu_memory()
+
+                        # Reconstruct dataset with computed variables
+                        metric_results[model_name] = xr.Dataset(computed_vars, attrs=result_lazy.attrs)
+                else:
+                    # No seperate computation needed
+                    metric_results[model_name] = result_lazy.compute()
+                clear_gpu_memory()
+
+            # Concatenate results across models for this metric
+            all_metrics[metric_name] = concat_dict_along_keys(metric_results, "model")
+            clear_gpu_memory()
+    
+    LOG.info("All metrics computed. Keys: %s", list(all_metrics.keys()))
+    
+    # Combine all metrics into a single Dataset
+    LOG.info("Combining all metrics into single Dataset")
+
+    combined_dataset = concat_dict_along_keys(all_metrics, "metric")
+
+    LOG.info("Final combined dataset shape: %s", combined_dataset.dims)
+    LOG.info("Final combined dataset variables: %s", list(combined_dataset.data_vars))
+    
+    return combined_dataset

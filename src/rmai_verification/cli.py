@@ -138,7 +138,7 @@ def run_slurm(args):
 
     # Wait for workers and measure queuing time
     expected_workers = args.jobs * args.processes
-    queuing_time = wait_for_workers(client, expected_workers, timeout=args.worker_timeout)
+    queuing_time = wait_for_workers(client, expected_workers, timeout=None)     # args.worker_timeout)
     profiler.record_slurm_queuing(queuing_time)
 
     logging.basicConfig(
@@ -169,16 +169,6 @@ def run_slurm(args):
         
         client.close()
         cluster.close()
-
-    verif = Verification(args.CONFIG)
-    try:
-        verif.verify()
-    except:
-        LOG.error("Error during verfication closing down dask cluster",exc_info=True)
-        client.close()
-        cluster.close()
-        sys.exit(1)
-
 
 def main():
 

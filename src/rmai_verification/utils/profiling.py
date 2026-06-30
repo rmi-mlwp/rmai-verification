@@ -294,12 +294,12 @@ def wait_for_workers(client, n_workers: int, timeout: int = 300) -> float:
 
     while True:
         elapsed = time.time() - start_time
-
-        if elapsed > timeout:
-            raise TimeoutError(
-                f"Timed out waiting for workers after {timeout}s. "
-                f"Only {len(client.scheduler_info()['workers'])} workers available."
-            )
+        if timeout != None:
+            if elapsed > timeout:
+                raise TimeoutError(
+                    f"Timed out waiting for workers after {timeout}s. "
+                    f"Only {len(client.scheduler_info()['workers'])} workers available."
+                )
 
         n_available = len(client.scheduler_info()["workers"])
 

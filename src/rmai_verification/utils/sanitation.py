@@ -44,6 +44,7 @@ def broadcast_nans(list_of_datasets : List[xr.Dataset]) -> None:
         common_coords = {
             dim: sorted(set(dsA[dim].values) & set(dsB[dim].values))
             for dim in dsA.dims
+            if dim in dsB.dims
         }
         
         # Iterate over all variables
