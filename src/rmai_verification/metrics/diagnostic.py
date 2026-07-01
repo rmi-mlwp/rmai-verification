@@ -388,13 +388,10 @@ def checkerboard(fcst: xr.Dataset | xr.DataArray, avg_dim: List[str] = None, ski
     return result
 
 
-def spread(fcst: xr.Dataset | xr.DataArray, avg_dim: List[str], member_dim: str = "ensemble", skipna: bool = True) -> xr.Dataset | xr.DataArray:
+def spread(fcst: xr.Dataset | xr.DataArray, avg_dim: List[str], member_dim: str = "ensemble", ddof: int = 0, skipna: bool = True) -> xr.Dataset | xr.DataArray:
     """
-    Ensemble spread: std of ensemble members around the ensemble mean (ddof=1).
+    Ensemble spread: sqrt of mean ensemble variance, pooled over avg_dim and member_dim.
     """
-    if skipna:
-        std = fcst.std(dim=member_dim, ddof=1, skipna=True)
-        return std.mean(dim=avg_dim, skipna=True)
-    else:
-        std = fcst.std(dim=member_dim, ddof=1)
-        return std.mean(dim=avg_dim)
+    var = fcst.var(dim=member_dim, ddof=ddof, skipna=skipna)
+    mean_var = var.mean(dim=avg_dim, skipna=skipna)
+    return np.sqrt(mean_var)

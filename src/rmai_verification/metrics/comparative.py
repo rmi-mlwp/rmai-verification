@@ -68,13 +68,17 @@ def skill(obs: xr.Dataset | xr.DataArray, fcst: xr.Dataset | xr.DataArray, avg_d
     """
     RMSE of the ensemble mean vs observations.
     """
-    ens_mean = fcst.mean(dim=member_dim, skipna=skipna) if skipna else fcst.mean(dim=member_dim)
+    ens_mean = fcst.mean(dim=member_dim, skipna=skipna)
     return rmse(obs, ens_mean, avg_dim, skipna=skipna)
 
 def SSR(obs: xr.Dataset | xr.DataArray, fcst: xr.Dataset | xr.DataArray, avg_dim: List[str], member_dim: str = "ensemble", skipna: bool = True) -> xr.Dataset | xr.DataArray: 
     """
     Spread Skill Ratio (SSR = Spread/Skill) gives an estimate of whether an ensemble is over (SSR > 1) or under (SSR < 1) dispersed.
+    Keep in mind that averaging over other dimensions after calculating this metric has a completly different meaning.
     """
+    fcst_spread = spread(fcst, avg_dim, member_dim=member_dim, ddof=0, skipna=skipna)
     fcst_skill = skill(obs, fcst, avg_dim, member_dim=member_dim, skipna=skipna)
-    fcst_spread = spread(fcst, avg_dim, member_dim=member_dim, skipna=skipna)
-    return fcst_spread / fcst_skill.where(fcst_skill > 0)       # replace inf with NaN (Can sometimes happen if the forecast is to good :) ) 
+    n_ens = fcst.sizes[member_dim]
+    correction = np.sqrt((n_ens + 1) / n_ens)                            # Is needed for a finite amount of ensemble members
+
+    return  correction * fcst_spread / fcst_skill
