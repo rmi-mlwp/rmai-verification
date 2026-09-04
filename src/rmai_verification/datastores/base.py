@@ -91,6 +91,7 @@ class BaseDataStore(abc.ABC):
         Returns: 
             None
         """
+        print(f"Variables in the dataset before selection: {list(self._data.keys())}")
         new_data = self._data[variables]
         self._data = new_data
     

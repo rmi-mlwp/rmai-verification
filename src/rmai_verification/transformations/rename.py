@@ -57,11 +57,15 @@ class Renamer():
         if isinstance(input_ds, xr.Dataset):
             new_dict = dict()
             for new_name,old_names in self.rename_dict.items():
+                if isinstance(old_names, str):
+                    old_names = [old_names]
                 for name in input_ds.keys():
                     if name in old_names:
                         new_dict[name]=new_name
                     else:
                         pass
+            print(f"Renaming variables in Dataset using mapping: {new_dict}")
+            print(f"Original variables: {list(input_ds.keys())}")
             new_ds = input_ds.rename(new_dict)
         else:
             assert "variable" in input_ds.coords(), "DataArray must have a variable coordinate"

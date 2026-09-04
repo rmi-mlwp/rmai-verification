@@ -132,6 +132,10 @@ class AnemoiDatasets(GridDataStore, ObsDataStore):
             ds_postproc = _postprocess(ds)
             
         if variables:
+            for variable in variables:
+                if variable not in ds_postproc["variable"]:
+                    LOG.error(f"Variable {variable} not found in dataset")
+                    raise ValueError
             ds_selected = ds_postproc.sel(variable=variables)
         else:
             ds_selected = ds_postproc

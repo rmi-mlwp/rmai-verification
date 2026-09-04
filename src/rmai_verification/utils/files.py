@@ -61,8 +61,8 @@ def get_filenames(path_fmt: str ,start : np.datetime64, end : np.datetime64, fre
             filenames.append(path)
         date += frequency
     filenames = list(set(filenames))
-    if len(filenames) == 1: 
-        filenames = filenames[0]
+    # if len(filenames) == 1: 
+    #     filenames = filenames[0]
     return filenames
 
 def write_yaml(x: Dict, fn: str, sort_keys: bool = False) -> None:
