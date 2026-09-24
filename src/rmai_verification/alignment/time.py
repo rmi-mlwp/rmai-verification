@@ -25,7 +25,14 @@ def align_reference_times(datastores : Dict[str, BaseDataStore]) -> None:
     for store in datastores.values():
         if not store.is_observation:
             ref_times.append(store.data["reference_time"].values)
-    ref_times = list(set(ref_times[0]).intersection(*ref_times))
+    # sorted(), not list(): a Python set of datetime64 iterates in an order that
+    # depends on hashing and so varies between processes. That order propagated
+    # through select_reference_times into the output, so the reference_time axis
+    # came out permuted within each batch and differently on every run. Values
+    # travelled with their own timestamps, so the data stayed correct -- but the
+    # axis was not reproducible, which made it impossible to tell a resumable
+    # store from a corrupt one.
+    ref_times = sorted(set(ref_times[0]).intersection(*ref_times))
     for store in datastores.values():
         if not store.is_observation:
             store.select_reference_times(ref_times)

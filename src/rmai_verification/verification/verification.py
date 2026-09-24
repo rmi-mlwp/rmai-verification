@@ -269,7 +269,11 @@ class Verification():
                     if "reference_time" not in ds.dims:
                         raise ValueError("Batching with zarr output requires a 'reference_time' dimension in the metrics dataset.")
 
-                    mode = "w" if batch_idx == 0 else "a"
+                    # "w" only when genuinely starting from scratch. When
+                    # resuming an interrupted run the store already holds the
+                    # earlier batches, so the first batch we process must append.
+                    resume_from = getattr(self, "_resume_from", 0)
+                    mode = "w" if (batch_idx == 0 and resume_from == 0) else "a"
 
                     save_dataset(
                         dataset=ds,
@@ -333,6 +337,76 @@ class Verification():
         if profiler:
             profiler.end_stage("visualize_clusters")
     
+    def _batch_reference_times(self, batch):
+        """The reference times a batch covers, as datetime64[ns]."""
+        freq = to_timedelta64(self._config["dates"]["frequency"])
+        start = np.datetime64(batch[0])
+        end = np.datetime64(batch[1])
+        return np.arange(start, end + freq, freq).astype("datetime64[ns]")
+
+    def _zarr_output_paths(self):
+        """Output zarr path per cluster, for clusters that write zarr."""
+        paths = []
+        for cluster in self._config["verification"]["clusters"]:
+            output_config = prep_config(self._config["output"], cluster)
+            if output_config.get("type") != "zarr":
+                continue
+            paths.append(output_config.get("path", f"{cluster}.zarr"))
+        return paths
+
+    def _resume_start_batch(self, batches):
+        """
+        How many leading batches are already complete in the output store(s).
+
+        A node failure or walltime kill leaves a store holding whole batches
+        (each batch is appended in a single to_zarr call). Counting them lets a
+        restart continue instead of recomputing from batch 0.
+
+        Conservative on purpose: the stored reference_time values must match the
+        expected ones exactly, and must end on a batch boundary. Anything else --
+        a store from a different config, or a write torn mid-append -- returns 0,
+        so the run starts over rather than appending onto something inconsistent.
+        """
+        paths = self._zarr_output_paths()
+        if not paths:
+            return 0
+
+        expected = [self._batch_reference_times(b) for b in batches]
+        done = None
+        for path in paths:
+            if not os.path.exists(path):
+                return 0
+            try:
+                stored = xr.open_zarr(path).reference_time.values.astype("datetime64[ns]")
+            except Exception as err:
+                LOG.warning("Could not read %s to resume (%s); starting from batch 0", path, err)
+                return 0
+
+            n = 0
+            pos = 0
+            for times in expected:
+                end = pos + len(times)
+                if end > len(stored):
+                    break
+                if not np.array_equal(stored[pos:end], times):
+                    LOG.warning(
+                        "%s diverges from the configured dates at batch %d; starting from batch 0",
+                        path, n,
+                    )
+                    return 0
+                pos, n = end, n + 1
+            if pos != len(stored):
+                LOG.warning(
+                    "%s holds %d reference times, which is not a whole number of "
+                    "batches (%d complete); starting from batch 0 rather than "
+                    "appending onto a torn write.",
+                    path, len(stored), n,
+                )
+                return 0
+            done = n if done is None else min(done, n)
+
+        return done or 0
+
     def verify(self):
         config = self._config
 
@@ -342,15 +416,25 @@ class Verification():
         end = config["dates"]["end"]
         frequency = config["dates"]["frequency"]
         batch_size = config["dates"].get("batch_size", -1)
-        batches = datetime_batches(start, end, frequency, batch_size)
-        LOG.info("Batches: %s", batches)
+        batches = list(datetime_batches(start, end, frequency, batch_size))
+        LOG.info("Batches: %d", len(batches))
 
         self._frequency = config["dates"]["frequency"]
         self._output_type = config["output"].get("type",None)
 
+        self._resume_from = self._resume_start_batch(batches)
+        if self._resume_from:
+            LOG.info(
+                "Resuming: %d of %d batches already in the output store, "
+                "continuing at batch %d",
+                self._resume_from, len(batches), self._resume_from,
+            )
+
         profiler = get_profiler()
 
         for i, batch in enumerate(batches):
+            if i < self._resume_from:
+                continue
             batch_label = f"batch_{i:03d}"
             profiler.start_batch(label=batch_label)
             LOG.info("Processing batch: %s", batch)

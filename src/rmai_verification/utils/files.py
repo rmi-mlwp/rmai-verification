@@ -60,9 +60,16 @@ def get_filenames(path_fmt: str ,start : np.datetime64, end : np.datetime64, fre
         else:
             filenames.append(path)
         date += frequency
-    filenames = list(set(filenames))
-    # if len(filenames) == 1: 
-    #     filenames = filenames[0]
+    # De-duplicate while KEEPING the chronological order the loop above built.
+    # `list(set(filenames))` dropped that order, and because Python randomises
+    # string hashing per process the order differed on every run: the forecast
+    # files were opened in an arbitrary order and the output reference_time axis
+    # came out permuted within each batch, differently each time. The values
+    # still travelled with their own timestamps, so the data was correct after
+    # sortby("reference_time") -- but the axis was not reproducible, which also
+    # made it impossible to tell a resumable store from a corrupt one.
+    seen = set()
+    filenames = [f for f in filenames if not (f in seen or seen.add(f))]
     return filenames
 
 def write_yaml(x: Dict, fn: str, sort_keys: bool = False) -> None:
