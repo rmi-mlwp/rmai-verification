@@ -151,14 +151,26 @@ class ObsDataStore(BaseDataStore):
         """
         return self._data["valid_time"].values
 
-    def select_valid_times(self,valid_times: Union[List[np.datetime64], NDArray[np.datetime64], xr.DataArray]) -> None:
-        """Subsets the data in the datastore to only contain 
+    def select_valid_times(self,
+                           valid_times: Union[List[np.datetime64], NDArray[np.datetime64], xr.DataArray],
+                           chunks: Union[Dict[str, Any], None] = None) -> None:
+        """Subsets the data in the datastore to only contain
         the selected valid_times
+
+        Args:
+            valid_times: the valid times to select, typically the 2D
+                (reference_time, lead_time) array of the forecasts.
+            chunks: optional dask chunks of the forecasts along the dims of
+                ``valid_times``, e.g. {"reference_time": (186,),
+                "lead_time": (1,)*72}. When given, the selection is built in
+                exactly these chunks (see ``_select_valid_times_windowed``).
 
         Returns:
             None
         """
         new_data = self._data.sel(valid_time=valid_times)
+        if chunks is not None and isinstance(valid_times, xr.DataArray):
+            new_data = _select_valid_times_windowed(self._data, valid_times, chunks, new_data)
         self._data = new_data
 
 class FcstDataStore(BaseDataStore):
@@ -219,3 +231,74 @@ class GriddedForecasts(GridDataStore, FcstDataStore):
     def __init__(self, files):
         self._data = xr.open_dataset(files)
 
+
+
+# Largest contiguous valid-time window (bytes per variable) that
+# _select_valid_times_windowed holds as a single chunk; above it the plain
+# label selection is kept.
+WINDOW_MAX_BYTES = 2 * 1024**3
+
+
+def _select_valid_times_windowed(data: xr.Dataset,
+                                 valid_times: xr.DataArray,
+                                 chunks: Dict[str, Any],
+                                 selected: xr.Dataset) -> xr.Dataset:
+    """Same values as ``data.sel(valid_time=valid_times)``, laid out in the
+    forecasts' chunks.
+
+    ``data.sel(valid_time=<2D array>)`` on dask data gathers point by point and
+    keeps the source's time chunking, so its (reference_time, lead_time) chunks
+    cross those of the forecast (e.g. 1 x 24 against 186 x 1). Every
+    elementwise op between the two then splits into 1 x 1 pieces: ~600k tasks
+    for 31 inits x 72 leads and 12 thresholds, which spent minutes and tens of
+    GB in the dask scheduler (ETS pilot, job 23477403; profile 23485113).
+
+    Here the contiguous valid-time span the batch needs (inits + lead range,
+    e.g. 186 + 72 hours) becomes one chunk along valid_time, read once, and
+    each forecast-shaped block is cut from it with ``np.take``: one task per
+    forecast block. ``selected`` is the plain lazy selection; only its data is
+    replaced, so coordinates, attributes and dim order stay identical to it.
+    Falls back to ``selected`` when a valid time is missing or the window
+    would be too large.
+    """
+    axis = data["valid_time"].values
+    want = valid_times.values
+    pos = np.searchsorted(axis, want)
+    if (pos >= axis.size).any() or not (axis[np.minimum(pos, axis.size - 1)] == want).all():
+        return selected
+    lo, hi = int(pos.min()), int(pos.max()) + 1
+    window = data.isel(valid_time=slice(lo, hi))
+    pos = pos - lo
+    vt_dims = list(valid_times.dims)
+
+    import dask.array as da
+
+    out = selected.copy()
+    for name, var in window.data_vars.items():
+        if "valid_time" not in var.dims or not hasattr(var.data, "dask"):
+            continue
+        rest = [d for d in var.dims if d != "valid_time"]
+        if np.prod([var.sizes[d] for d in rest]) * (hi - lo) * var.dtype.itemsize > WINDOW_MAX_BYTES:
+            return selected
+        src = var.transpose("valid_time", *rest).data.rechunk({0: -1})
+        idx = da.from_array(pos, chunks=tuple(chunks.get(d, -1) for d in vt_dims))
+        n_idx = idx.ndim
+        rest_ind = tuple(range(n_idx + 1, n_idx + 1 + len(rest)))
+        arr = da.blockwise(
+            _take_window, tuple(range(n_idx)) + rest_ind,
+            idx, tuple(range(n_idx)),
+            src, (n_idx,) + rest_ind,
+            concatenate=True, dtype=var.dtype, meta=np.empty((0,) * (n_idx + len(rest)), var.dtype),
+        )
+        target_dims = selected[name].dims
+        arr_dims = vt_dims + rest
+        # Set the data on the (shallow-copied) variable itself: assigning a
+        # DataArray would re-merge its coordinates, including the grid
+        # MultiIndex, for nothing.
+        out.variables[name].data = arr.transpose([arr_dims.index(d) for d in target_dims])
+    return out
+
+
+def _take_window(idx: np.ndarray, src: np.ndarray) -> np.ndarray:
+    """Blocks of the windowed selection: src[idx[...], ...]."""
+    return np.take(src, idx, axis=0)

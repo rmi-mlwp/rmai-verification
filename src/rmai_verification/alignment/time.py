@@ -63,9 +63,10 @@ def align_valid_times(datastores : Dict[str, BaseDataStore]) -> None:
 
     all_fcst_valid_times  = _get_all_fcst_valid_times(datastores)
     if all_fcst_valid_times is not None:
+        chunks = _common_fcst_chunks(datastores, all_fcst_valid_times.dims)
         for store in datastores.values():
             if store.is_observation:
-                store.select_valid_times(all_fcst_valid_times)
+                store.select_valid_times(all_fcst_valid_times, chunks=chunks)
     else:
         LOG.warning("No forecasts found in datastores, homogenizing valid_time on observations")
         raise NotImplementedError
@@ -104,3 +105,27 @@ def _get_all_fcst_valid_times(datastores : Dict[str, BaseDataStore]) -> xr.DataA
 
 
 
+
+
+def _common_fcst_chunks(datastores: Dict[str, BaseDataStore], dims) -> Dict[str, tuple] | None:
+    """The forecasts' dask chunks along ``dims`` (reference_time, lead_time),
+    if every dask-backed forecast variable has the same ones; otherwise None.
+
+    Observations are then selected in exactly these chunks, so forecast and
+    reference blocks line up one to one (see
+    ``datastores.base._select_valid_times_windowed``).
+    """
+    found = None
+    for store in datastores.values():
+        if store.is_observation:
+            continue
+        for var in store.data.data_vars.values():
+            if var.chunks is None or not all(d in var.dims for d in dims):
+                continue
+            c = {d: var.chunks[var.dims.index(d)] for d in dims}
+            if found is None:
+                found = c
+            elif c != found:
+                LOG.info("Forecast chunks differ between datastores; keeping the plain valid-time selection")
+                return None
+    return found

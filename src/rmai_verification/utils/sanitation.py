@@ -56,9 +56,17 @@ def broadcast_nans(list_of_datasets : List[xr.Dataset]) -> None:
                 # Compute NaN mask for shared coordinates
                 nan_mask = selA.isnull() | selB.isnull()
 
-                # Apply NaN mask back to both datasets
-                dsA[var].loc[common_coords] = dsA[var].sel(**common_coords).where(~nan_mask)
-                dsB[var].loc[common_coords] = dsB[var].sel(**common_coords).where(~nan_mask)
+                # Apply NaN mask back to both datasets. Not via
+                # `.loc[common_coords] = ...`: in-place assignment with
+                # array indexers is not supported for dask-backed data
+                # ("xarray can't set arrays with multiple array indices to
+                # dask yet"), which every forecast store is. Extending the mask
+                # to each dataset's own coordinates (False outside the shared
+                # ones) and applying it with `where` gives the same result,
+                # stays lazy, and works for numpy data too.
+                for ds in (dsA, dsB):
+                    mask = nan_mask.reindex_like(ds[var], fill_value=False)
+                    ds[var] = ds[var].where(~mask)
 
 
 def concat_dict_along_keys(dict_of_datasets : Dict[str,xr.Dataset], dim : str) -> xr.Dataset:

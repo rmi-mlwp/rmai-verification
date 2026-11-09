@@ -11,6 +11,7 @@ from .anemoi_datasets import AnemoiDatasets
 from .anemoi_inference import AnemoiInference
 from .rmi_re_pytools import RmiRePytoolsForecast, RmiRePytoolsObservation
 from .ifs_fcst import IfsForecast
+from .cf_lead_time import CFLeadTime
 from .base import PointObservations
 
 LOG = logging.getLogger(__name__)
@@ -22,7 +23,8 @@ DATASTORES = {
     "rmi-re-pytools-fc": RmiRePytoolsForecast,
     "rmi-re-pytools-obs": RmiRePytoolsObservation,
     "point-observations" : PointObservations,
-    "ifs-forecast": IfsForecast
+    "ifs-forecast": IfsForecast,
+    "cf-lead-time": CFLeadTime,
 }
 def load_datastores(datastores : Dict[str, Dict], start_date : str, end_date : str, frequency : str) -> Dict[str, BaseDataStore]:
     """Load datastores
@@ -46,6 +48,16 @@ def load_datastores(datastores : Dict[str, Dict], start_date : str, end_date : s
     for name, config in datastores.items():
         path = config["path"]
         store_type = config["type"]
+        store_cls = DATASTORES[store_type]
+        kwargs = {k: v for k, v in config.items() if k not in ("path", "type")}
+
+        # Stores whose files are not one-per-init (e.g. one per month and lead
+        # time) work out for themselves which files a batch needs.
+        if getattr(store_cls, "finds_own_files", False):
+            stores[name] = store_cls(
+                path_fmt=path, start=start_date, end=end_date, frequency=frequency, **kwargs
+            )
+            continue
 
         files = get_filenames(
             path_fmt=path,
@@ -55,12 +67,7 @@ def load_datastores(datastores : Dict[str, Dict], start_date : str, end_date : s
         )
         LOG.debug("Loading files %s", ", ".join(files))
 
-        store_cls = DATASTORES[store_type]
-
-        stores[name] = store_cls(
-            files=files,
-            **{k: v for k, v in config.items() if k not in ("path", "type")}
-        )
+        stores[name] = store_cls(files=files, **kwargs)
 
     return stores
 

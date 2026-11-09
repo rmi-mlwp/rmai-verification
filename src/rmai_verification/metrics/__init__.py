@@ -2,7 +2,7 @@ import xarray as xr
 import logging
 import gc
 
-from . import xskill, scrs
+from . import xskill, scrs, categorical
 from typing import List, Dict, Optional
 from ..utils.sanitation import concat_dict_along_keys
 
@@ -142,6 +142,12 @@ METRICS = {
         "mse": scrs.mse,
         "bias": scrs.bias,
     },
+    # Threshold-exceedance counts; derive ETS etc. afterwards with
+    # categorical.scores_from_table. Needs metric_kwargs: {thresholds: [...]}.
+    "categorical" : {
+        "contingency": categorical.contingency,
+        "contingency_map": categorical.contingency_map,
+    },
 }
 
 def calculate_metrics(reference : xr.Dataset,
@@ -150,7 +156,9 @@ def calculate_metrics(reference : xr.Dataset,
                       package : str, 
                       metrics : List[str], 
                       avg_dims : str | List[str],
-                      large_memory: bool = False
+                      large_memory: bool = False,
+                      metric_kwargs: Optional[Dict] = None,
+                      compute: bool = True,
                       ) -> xr.Dataset:
     """Calculate specified metrics between a reference dataset and multiple model datasets.
 
@@ -170,6 +178,9 @@ def calculate_metrics(reference : xr.Dataset,
             List of metric names to calculate
         avg_dims : str | List[str]
             Dimension(s) over which to average the metrics
+        metric_kwargs : Dict, optional
+            Extra keyword arguments passed to every metric of this cluster,
+            e.g. {"thresholds": [...]} for categorical.contingency
         
         Returns
         -------
@@ -200,6 +211,9 @@ def calculate_metrics(reference : xr.Dataset,
     )
     LOG.info(f"Calculating metrics: {metrics} using package: {package} with avg_dims: {avg_dims}")
     LOG.info(f"Large memory mode: {large_memory}")
+    metric_kwargs = dict(metric_kwargs or {})
+    if metric_kwargs:
+        LOG.info(f"Metric kwargs: {metric_kwargs}")
 
     LOG.info("=== Chunk diagnostics BEFORE metrics ===")
     log_xarray_chunks(reference, "reference", max_vars=20)
@@ -220,7 +234,7 @@ def calculate_metrics(reference : xr.Dataset,
             if large_memory:
                 # Compute metrics variable-by-variable to reduce memory usage
                 # This prevents OOM errors when working with large datasets
-                result_lazy = metric(reference_aligned, model_aligned, avg_dims)
+                result_lazy = metric(reference_aligned, model_aligned, avg_dims, **metric_kwargs)
                 
                 # Free aligned datasets early to reduce memory pressure
                 del reference_aligned, model_aligned
@@ -249,7 +263,9 @@ def calculate_metrics(reference : xr.Dataset,
                 # Free the lazy result to avoid holding references
                 del result_lazy
             else:
-                _metric[name]=metric(reference_aligned, model_aligned, avg_dims).compute()
+                _metric[name]=metric(reference_aligned, model_aligned, avg_dims, **metric_kwargs)
+                if compute:
+                    _metric[name] = _metric[name].compute()
             
             # Clear GPU memory after each metric computation to prevent OOM
             clear_gpu_memory()
